@@ -15,6 +15,7 @@ ROOT_RESOURCE = os.path.join(os.path.dirname(__file__), 'resource')
 dashscope.api_key = os.getenv('DASHSCOPE_API_KEY', '')  # 从环境变量获取 API Key
 dashscope.timeout = 30  # 设置超时时间为 30 秒
 
+
 # ====== 门票助手 system prompt 和函数描述 ======
 system_prompt = """我是门票助手，以下是关于门票订单表相关的字段，我可能会编写对应的SQL(运行环境是MySQL8.0)，对数据进行查询
 -- 门票订单表
@@ -81,7 +82,7 @@ class ExcSQLTool(BaseTool):
 def init_agent_service():
     """初始化门票助手服务"""
     llm_cfg = {
-        'model': 'qwen-turbo-latest',
+        'model': 'qwen-max',
         'timeout': 30,
         'retry_count': 3,
     }
