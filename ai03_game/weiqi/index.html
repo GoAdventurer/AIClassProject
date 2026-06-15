@@ -1,0 +1,2013 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GoNeon · 围棋</title>
+<style>
+:root {
+  --bg-1: #0a0e27;
+  --bg-2: #1a1147;
+  --neon-blue: rgba(120,180,255,0.7);
+  --neon-blue-soft: rgba(120,180,255,0.25);
+  --panel-bg: rgba(20,30,80,0.55);
+  --panel-border: rgba(120,180,255,0.4);
+  --text: #eaeaea;
+  --text-dim: rgba(220,230,255,0.6);
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0;
+  background: linear-gradient(135deg, var(--bg-1) 0%, var(--bg-2) 100%);
+  background-attachment: fixed;
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, "Helvetica Neue", "PingFang SC", sans-serif;
+  min-height: 100vh;
+  user-select: none;
+}
+button {
+  background: rgba(96,128,255,0.18);
+  color: var(--text);
+  border: 1px solid var(--panel-border);
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.15s ease;
+}
+button:hover:not(:disabled) {
+  background: rgba(96,128,255,0.4);
+  box-shadow: 0 0 12px rgba(120,180,255,0.45);
+  transform: translateY(-1px);
+}
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+input[type=number], input[type=range], select {
+  background: rgba(20,30,80,0.5);
+  color: var(--text);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font: inherit;
+}
+h1, h2, h3 { font-weight: 300; letter-spacing: 1px; margin: 0 0 12px; }
+.hidden { display: none !important; }
+
+/* === Menu === */
+#menu {
+  max-width: 460px;
+  margin: 60px auto;
+  padding: 32px;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 16px;
+  box-shadow: 0 0 60px rgba(120,180,255,0.18);
+}
+#menu h1 {
+  font-size: 28px;
+  text-align: center;
+  margin-bottom: 24px;
+  text-shadow: 0 0 12px rgba(120,180,255,0.7);
+}
+.menu-row {
+  display: flex; gap: 8px; align-items: center;
+  margin: 14px 0; flex-wrap: wrap;
+}
+.menu-row > .label { width: 70px; color: var(--text-dim); }
+.opt-group { display: flex; gap: 6px; flex-wrap: wrap; }
+.opt-btn {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--panel-border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.15s;
+}
+.opt-btn:hover { background: rgba(96,128,255,0.2); }
+.opt-btn.active {
+  background: rgba(96,128,255,0.5);
+  box-shadow: 0 0 10px rgba(120,180,255,0.6);
+}
+.menu-actions { display: flex; gap: 10px; margin-top: 24px; flex-wrap: wrap; }
+.menu-actions button { flex: 1; min-width: 120px; padding: 12px; }
+
+/* === Game layout === */
+#game { display: none; padding: 16px; max-width: 1280px; margin: 0 auto; }
+#game.active { display: grid; grid-template-columns: 1fr 320px; gap: 20px; }
+@media (max-width: 880px) {
+  #game.active { grid-template-columns: 1fr; }
+  #sidebar { order: 2; }
+}
+#board-wrap {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  width: 100%;
+  max-height: calc(100vh - 80px);
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#board-host { position: relative; }
+#board-host canvas { position: absolute; left: 0; top: 0; }
+
+/* === Sidebar === */
+#sidebar { display: flex; flex-direction: column; gap: 12px; }
+.player-card {
+  padding: 12px 16px;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  transition: all 0.2s;
+}
+.player-card.active {
+  box-shadow: 0 0 18px rgba(120,180,255,0.55);
+  border-color: rgba(120,180,255,0.8);
+}
+.player-card .pn { font-weight: 500; }
+.player-card .pi { display: flex; gap: 16px; margin-top: 6px; font-size: 13px; color: var(--text-dim); }
+.thinking { margin-top: 6px; font-size: 12px; color: rgba(120,180,255,0.9); }
+.thinking-bar { height: 4px; background: rgba(255,255,255,0.08); border-radius: 2px; overflow: hidden; margin-top: 4px; }
+.thinking-fill { height: 100%; background: rgba(120,180,255,0.8); transition: width 0.15s; }
+
+.btn-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.btn-row button { flex: 1; min-width: 90px; padding: 8px; font-size: 13px; }
+
+#move-log {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+#move-log .label { color: var(--text); }
+
+#winrate-card {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+#winrate-bar { height: 8px; background: rgba(0,0,0,0.4); border-radius: 4px; overflow: hidden; margin-top: 6px; }
+#winrate-fill { height: 100%; background: linear-gradient(90deg, #6080ff, #aac8ff); transition: width 0.3s; }
+
+/* Replay UI === */
+#replay-ui {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+#replay-ui input[type=range] { width: 100%; }
+#replay-ui .center { text-align: center; font-size: 13px; color: var(--text-dim); }
+
+/* === Toast === */
+.toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  padding: 10px 18px;
+  background: rgba(255,80,80,0.92);
+  color: #fff;
+  border-radius: 8px;
+  z-index: 9999;
+  box-shadow: 0 0 20px rgba(255,80,80,0.5);
+  animation: toast-in 0.2s ease;
+}
+@keyframes toast-in {
+  from { opacity: 0; transform: translate(-50%, 20px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* === Modal overlay === */
+.modal-back {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.65);
+  backdrop-filter: blur(4px);
+  z-index: 100;
+  display: flex; align-items: center; justify-content: center;
+}
+.modal-card {
+  background: linear-gradient(135deg, rgba(20,30,80,0.95), rgba(40,30,100,0.95));
+  border: 1px solid var(--panel-border);
+  border-radius: 16px;
+  padding: 28px 32px;
+  min-width: 320px;
+  max-width: 480px;
+  text-align: center;
+  box-shadow: 0 0 40px rgba(120,180,255,0.4);
+}
+.modal-card h2 { margin-bottom: 16px; font-size: 24px; }
+.modal-card .winner {
+  font-size: 28px;
+  margin: 16px 0;
+  text-shadow: 0 0 12px rgba(120,180,255,0.7);
+}
+.modal-card .row-score { display: flex; justify-content: space-between; margin: 8px 0; font-size: 15px; }
+
+/* === Settings panel === */
+#settings-panel {
+  position: absolute; top: 50px; right: 16px;
+  background: rgba(20,30,80,0.95);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 12px 16px;
+  z-index: 50;
+  display: none;
+  min-width: 200px;
+}
+#settings-panel.active { display: block; }
+#settings-panel .row { display: flex; justify-content: space-between; align-items: center; margin: 6px 0; gap: 12px; font-size: 13px; }
+
+#topbar {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 24px;
+  border-bottom: 1px solid rgba(120,180,255,0.15);
+}
+#topbar .title { font-size: 18px; letter-spacing: 2px; text-shadow: 0 0 8px rgba(120,180,255,0.5); }
+#topbar button.icon { padding: 6px 12px; background: transparent; }
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <span class="title">⚪ GoNeon · 围棋</span>
+  <span style="position:relative">
+    <button class="icon" id="btn-settings">⚙</button>
+    <div id="settings-panel">
+      <div class="row"><span>音效</span><label><input type="checkbox" id="set-sound" checked> 开</label></div>
+      <div class="row"><span>音量</span><input type="range" id="set-volume" min="0" max="100" value="70" style="width:120px"></div>
+      <div class="row"><button id="btn-back-menu" style="width:100%">回主菜单</button></div>
+    </div>
+  </span>
+</div>
+
+<div id="menu"></div>
+<div id="game"></div>
+
+<script>
+/* =========================================================================
+ * GoNeon — 单文件围棋
+ * 模块顺序（依赖向上）：
+ *   EventBus → BoardOps → Zobrist → Engine → Scoring →
+ *   SGF → Storage →
+ *   AIHeuristics → AIEasy → AIMedium → AIMcts → AIRunner →
+ *   Theme → BoardLayer → StoneLayer → FxLayer → BoardRenderer →
+ *   AudioAssets → AudioFx →
+ *   MenuUI → SidebarUI → ReplayUI → ScoringUI →
+ *   App
+ * ========================================================================= */
+
+const GoNeon = {};
+
+/* ============================================================
+ * EventBus — 极简 pub/sub
+ * ============================================================ */
+GoNeon.EventBus = (() => {
+  function create() {
+    const subs = {};
+    return {
+      on(ev, fn) { (subs[ev] = subs[ev] || []).push(fn); },
+      off(ev, fn) { if (subs[ev]) subs[ev] = subs[ev].filter(f => f !== fn); },
+      emit(ev, data) {
+        if (!subs[ev]) return;
+        for (const fn of subs[ev].slice()) {
+          try { fn(data); } catch (e) { console.error('listener error:', e); }
+        }
+      },
+    };
+  }
+  return { create };
+})();
+
+/* ============================================================
+ * BoardOps — 邻居 / 棋串 / 气
+ * ============================================================ */
+GoNeon.BoardOps = (() => {
+  function inBounds(size, x, y) { return x >= 0 && y >= 0 && x < size && y < size; }
+  function idx(size, x, y) { return y * size + x; }
+  function neighbors(size, x, y) {
+    const out = [];
+    if (x > 0) out.push([x - 1, y]);
+    if (x < size - 1) out.push([x + 1, y]);
+    if (y > 0) out.push([x, y - 1]);
+    if (y < size - 1) out.push([x, y + 1]);
+    return out;
+  }
+  // groupAt → { color, stones: Set<idx>, liberties: Set<idx> }
+  function groupAt(board, size, x, y) {
+    const start = idx(size, x, y);
+    const color = board[start];
+    if (color === 0) return null;
+    const stones = new Set();
+    const liberties = new Set();
+    const stack = [[x, y]];
+    while (stack.length) {
+      const [cx, cy] = stack.pop();
+      const i = idx(size, cx, cy);
+      if (stones.has(i)) continue;
+      stones.add(i);
+      for (const [nx, ny] of neighbors(size, cx, cy)) {
+        const ni = idx(size, nx, ny);
+        const v = board[ni];
+        if (v === 0) liberties.add(ni);
+        else if (v === color && !stones.has(ni)) stack.push([nx, ny]);
+      }
+    }
+    return { color, stones, liberties };
+  }
+  return { inBounds, idx, neighbors, groupAt };
+})();
+
+/* ============================================================
+ * Zobrist — 64-bit BigInt 哈希用于全局同形（劫争）检测
+ * ============================================================ */
+GoNeon.Zobrist = (() => {
+  function rand64() {
+    const hi = BigInt(Math.floor(Math.random() * 0x100000000));
+    const lo = BigInt(Math.floor(Math.random() * 0x100000000));
+    return (hi << 32n) | lo;
+  }
+  function init(size) {
+    const n = size * size;
+    const table = new Array(2 * n);
+    for (let i = 0; i < table.length; i++) table[i] = rand64();
+    return { size, table };
+  }
+  function entryIndex(z, boardIdx, color) {
+    return (color - 1) * (z.size * z.size) + boardIdx;
+  }
+  function computeHash(z, board) {
+    let h = 0n;
+    for (let i = 0; i < board.length; i++) {
+      const c = board[i];
+      if (c !== 0) h ^= z.table[entryIndex(z, i, c)];
+    }
+    return h;
+  }
+  function xorPlace(hash, z, boardIdx, color) {
+    return hash ^ z.table[entryIndex(z, boardIdx, color)];
+  }
+  return { init, computeHash, xorPlace };
+})();
+
+/* ============================================================
+ * Engine — 规则与状态核心（不可变快照）
+ * ============================================================ */
+GoNeon.Engine = (() => {
+  const B = GoNeon.BoardOps;
+  const Z = GoNeon.Zobrist;
+
+  function createGame({ size = 19, komi = 7.5 } = {}) {
+    const zob = Z.init(size);
+    return {
+      size, komi,
+      board: new Int8Array(size * size),
+      toPlay: 1,
+      captures: { black: 0, white: 0 },
+      history: [],
+      moveLog: [],
+      passes: 0,
+      phase: 'playing',
+      hash: 0n,
+      zob,
+      seenHashes: new Map(),
+    };
+  }
+
+  function snapshot(s) {
+    return {
+      boardCopy: new Int8Array(s.board),
+      hash: s.hash,
+      toPlay: s.toPlay,
+      captures: { ...s.captures },
+      passes: s.passes,
+    };
+  }
+
+  function tryMove(state, x, y) {
+    if (state.phase !== 'playing') return { ok: false, reason: 'not_playing' };
+    if (!B.inBounds(state.size, x, y)) return { ok: false, reason: 'out_of_bounds' };
+    const size = state.size;
+    const i = B.idx(size, x, y);
+    if (state.board[i] !== 0) return { ok: false, reason: 'occupied' };
+
+    const board = new Int8Array(state.board);
+    board[i] = state.toPlay;
+    let hash = Z.xorPlace(state.hash, state.zob, i, state.toPlay);
+
+    // 1) 提对方零气子
+    const opp = state.toPlay === 1 ? 2 : 1;
+    let captured = 0;
+    const seen = new Set();
+    for (const [nx, ny] of B.neighbors(size, x, y)) {
+      const ni = B.idx(size, nx, ny);
+      if (board[ni] === opp && !seen.has(ni)) {
+        const g = B.groupAt(board, size, nx, ny);
+        for (const s of g.stones) seen.add(s);
+        if (g.liberties.size === 0) {
+          for (const s of g.stones) {
+            hash = Z.xorPlace(hash, state.zob, s, opp);
+            board[s] = 0;
+          }
+          captured += g.stones.size;
+        }
+      }
+    }
+
+    // 2) 自杀检查
+    const ownGroup = B.groupAt(board, size, x, y);
+    if (ownGroup.liberties.size === 0) return { ok: false, reason: 'suicide' };
+
+    // 3) 全局同形（位置劫）检查
+    if ((state.seenHashes.get(hash) || 0) > 0) return { ok: false, reason: 'ko' };
+
+    const next = {
+      ...state,
+      board, hash,
+      history: state.history.slice(),
+      moveLog: state.moveLog.slice(),
+      captures: { ...state.captures },
+      seenHashes: new Map(state.seenHashes),
+      phase: 'playing',
+      passes: 0,
+    };
+    next.history.push(snapshot(state));
+    next.moveLog.push({ color: state.toPlay, x, y });
+    if (captured > 0) {
+      if (state.toPlay === 1) next.captures.black += captured;
+      else next.captures.white += captured;
+    }
+    next.toPlay = opp;
+    next.seenHashes.set(hash, 1);
+    return { ok: true, next };
+  }
+
+  function undo(state) {
+    if (state.history.length === 0) return state;
+    const last = state.history[state.history.length - 1];
+    const newSeen = new Map(state.seenHashes);
+    const cur = newSeen.get(state.hash) || 0;
+    if (cur <= 1) newSeen.delete(state.hash); else newSeen.set(state.hash, cur - 1);
+    return {
+      ...state,
+      board: last.boardCopy,
+      hash: last.hash,
+      toPlay: last.toPlay,
+      captures: { ...last.captures },
+      passes: last.passes,
+      history: state.history.slice(0, -1),
+      moveLog: state.moveLog.slice(0, -1),
+      seenHashes: newSeen,
+      phase: 'playing',
+      winner: undefined,
+      endReason: undefined,
+    };
+  }
+
+  function pass(state) {
+    if (state.phase !== 'playing') return state;
+    const next = {
+      ...state,
+      history: state.history.slice(),
+      moveLog: state.moveLog.slice(),
+      captures: { ...state.captures },
+      seenHashes: new Map(state.seenHashes),
+    };
+    next.history.push(snapshot(state));
+    next.moveLog.push({ color: state.toPlay, pass: true });
+    next.passes = state.passes + 1;
+    next.toPlay = state.toPlay === 1 ? 2 : 1;
+    if (next.passes >= 2) next.phase = 'scoring';
+    return next;
+  }
+
+  function resign(state, color) {
+    return {
+      ...state,
+      phase: 'ended',
+      winner: color === 1 ? 2 : 1,
+      endReason: 'resign',
+    };
+  }
+
+  return { createGame, tryMove, undo, pass, resign };
+})();
+
+/* ============================================================
+ * Scoring — 数子 / 划领地 / 自动判死
+ * ============================================================ */
+GoNeon.Scoring = (() => {
+  const B = GoNeon.BoardOps;
+
+  function regions(board, size) {
+    const seen = new Uint8Array(size * size);
+    const out = [];
+    for (let i = 0; i < size * size; i++) {
+      if (seen[i] || board[i] !== 0) continue;
+      const points = [];
+      const borderColors = new Set();
+      const stack = [i];
+      while (stack.length) {
+        const j = stack.pop();
+        if (seen[j]) continue;
+        seen[j] = 1;
+        if (board[j] === 0) {
+          points.push(j);
+          const x = j % size, y = Math.floor(j / size);
+          for (const [nx, ny] of B.neighbors(size, x, y)) {
+            stack.push(B.idx(size, nx, ny));
+          }
+        } else {
+          borderColors.add(board[j]);
+        }
+      }
+      out.push({ points, owner: borderColors.size === 1 ? [...borderColors][0] : 0 });
+    }
+    return out;
+  }
+
+  // 自动判死：保守且专注于"明显死子"的算法
+  // 仅当一个棋串满足以下所有条件时才判死：
+  //   - 气数 <= 2（小且接近被吃）
+  //   - 所有相邻空区的边界（除该群外）只含对方颜色（不接触我方任何其他棋子）
+  //   - 所有相邻空区合计大小 <= 6（无足够做眼空间，9 路以下保守取小值）
+  // 这是一个"明显死"判定 — 不会把对杀中的双方都误判，但也不能识别复杂残局。
+  // 复杂残局（双活/收官半目等）由"手动确认"按钮兜底。
+  function detectDeadStones(state) {
+    const { board, size } = state;
+    const dead = [];
+    const visited = new Set();
+    const regs = regions(board, size);
+    const opp = c => c === 1 ? 2 : 1;
+
+    for (let i = 0; i < size * size; i++) {
+      if (visited.has(i) || board[i] === 0) continue;
+      const g = B.groupAt(board, size, i % size, Math.floor(i / size));
+      for (const s of g.stones) visited.add(s);
+      if (g.liberties.size === 0 || g.liberties.size > 4) continue;
+
+      const adj = regs.filter(r => r.points.some(p => g.liberties.has(p)));
+      let totalSpace = 0;
+      let safe = true;
+      for (const r of adj) {
+        totalSpace += r.points.length;
+        // 检查：该 region 的边界（除该群外）是否只包含对方
+        let touchesOtherSelf = false;
+        let touchesOpp = false;
+        for (const p of r.points) {
+          const px = p % size, py = Math.floor(p / size);
+          for (const [nx, ny] of B.neighbors(size, px, py)) {
+            const ni = ny * size + nx;
+            const c = board[ni];
+            if (c === g.color && !g.stones.has(ni)) { touchesOtherSelf = true; break; }
+            if (c === opp(g.color)) touchesOpp = true;
+          }
+          if (touchesOtherSelf) break;
+        }
+        if (touchesOtherSelf || !touchesOpp) { safe = false; break; }
+      }
+      if (safe && totalSpace <= 9) {
+        for (const s of g.stones) dead.push([s % size, Math.floor(s / size)]);
+      }
+    }
+    return dead;
+  }
+
+  // Chinese: 子数 + 单方围地 + 贴目
+  function score(state, deadOverride) {
+    const size = state.size;
+    const board = new Int8Array(state.board);
+    const dead = deadOverride || detectDeadStones(state);
+    for (const [x, y] of dead) {
+      board[B.idx(size, x, y)] = 0;
+    }
+    let black = 0, white = 0;
+    for (let i = 0; i < size * size; i++) {
+      if (board[i] === 1) black++;
+      else if (board[i] === 2) white++;
+    }
+    for (const r of regions(board, size)) {
+      if (r.owner === 1) black += r.points.length;
+      else if (r.owner === 2) white += r.points.length;
+    }
+    white += state.komi;
+    const winner = black > white ? 1 : black < white ? 2 : 0;
+    const margin = Math.abs(black - white);
+    return { black, white, winner, margin, dead };
+  }
+
+  return { regions, detectDeadStones, score };
+})();
+
+/* ============================================================
+ * SGF — 解析 / 序列化
+ * ============================================================ */
+GoNeon.SGF = (() => {
+  function coord(x, y) {
+    const c = n => String.fromCharCode(97 + n);
+    return c(x) + c(y);
+  }
+  function decodeCoord(s) {
+    if (!s) return null;
+    return [s.charCodeAt(0) - 97, s.charCodeAt(1) - 97];
+  }
+  function write(state) {
+    const parts = [];
+    parts.push('(;FF[4]GM[1]CA[UTF-8]');
+    parts.push('SZ[' + state.size + ']');
+    parts.push('KM[' + state.komi + ']');
+    parts.push('RU[Chinese]');
+    parts.push('AP[GoNeon:1]');
+    for (const m of state.moveLog) {
+      const tag = m.color === 1 ? 'B' : 'W';
+      if (m.pass) parts.push(';' + tag + '[]');
+      else parts.push(';' + tag + '[' + coord(m.x, m.y) + ']');
+    }
+    parts.push(')');
+    return parts.join('');
+  }
+  function parse(text) {
+    const re = /([A-Z]+)\[([^\]]*)\]/g;
+    let m, props = [];
+    while ((m = re.exec(text)) !== null) props.push({ id: m[1], val: m[2] });
+    if (props.length === 0) throw new Error('not a valid SGF');
+    let size = 19, komi = 7.5;
+    const moves = [];
+    for (const p of props) {
+      if (p.id === 'SZ') size = parseInt(p.val, 10);
+      else if (p.id === 'KM') komi = parseFloat(p.val) || 7.5;
+      else if (p.id === 'B' || p.id === 'W') {
+        const color = p.id === 'B' ? 1 : 2;
+        if (p.val === '') moves.push({ color, pass: true });
+        else {
+          const c = decodeCoord(p.val);
+          if (c) moves.push({ color, x: c[0], y: c[1] });
+        }
+      }
+    }
+    let s = GoNeon.Engine.createGame({ size, komi });
+    for (const mv of moves) {
+      if (mv.pass) s = GoNeon.Engine.pass(s);
+      else {
+        const r = GoNeon.Engine.tryMove(s, mv.x, mv.y);
+        if (!r.ok) throw new Error('illegal move at (' + mv.x + ',' + mv.y + '): ' + r.reason);
+        s = r.next;
+      }
+    }
+    return s;
+  }
+  return { write, parse, coord, decodeCoord };
+})();
+
+/* ============================================================
+ * Storage — localStorage（带降级保护）
+ * ============================================================ */
+GoNeon.Storage = (() => {
+  const KEY_CUR = 'goneon.current';
+  const KEY_HIST = 'goneon.history';
+  let warned = false;
+  function safe(fn) {
+    try { return fn(); } catch (e) {
+      if (!warned) { console.warn('localStorage unavailable'); warned = true; }
+      return null;
+    }
+  }
+  function saveCurrent(o) { safe(() => localStorage.setItem(KEY_CUR, JSON.stringify(o))); }
+  function loadCurrent() {
+    const raw = safe(() => localStorage.getItem(KEY_CUR));
+    if (!raw) return null;
+    try { return JSON.parse(raw); } catch { return null; }
+  }
+  function clearCurrent() { safe(() => localStorage.removeItem(KEY_CUR)); }
+  function appendHistory(o) {
+    const list = getHistory();
+    list.unshift(o);
+    while (list.length > 10) list.pop();
+    safe(() => localStorage.setItem(KEY_HIST, JSON.stringify(list)));
+  }
+  function getHistory() {
+    const raw = safe(() => localStorage.getItem(KEY_HIST));
+    if (!raw) return [];
+    try { return JSON.parse(raw); } catch { return []; }
+  }
+  return { saveCurrent, loadCurrent, clearCurrent, appendHistory, getHistory };
+})();
+
+/* ============================================================
+ * AIHeuristics — 通用启发式：眼位、候选点、影响力图
+ * ============================================================ */
+GoNeon.AIHeuristics = (() => {
+  const B = GoNeon.BoardOps;
+  function isOwnEye(board, size, x, y, color) {
+    if (board[y * size + x] !== 0) return false;
+    for (const [nx, ny] of B.neighbors(size, x, y)) {
+      if (board[ny * size + nx] !== color) return false;
+    }
+    const diag = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
+    let same = 0, off = 0;
+    for (const [dx, dy] of diag) {
+      const nx = x + dx, ny = y + dy;
+      if (!B.inBounds(size, nx, ny)) off++;
+      else if (board[ny * size + nx] === color) same++;
+    }
+    if (off > 0) return same + off >= 3;
+    return same >= 3;
+  }
+  function candidateMoves(state) {
+    const out = [];
+    const { board, size, toPlay } = state;
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+      if (board[y * size + x] !== 0) continue;
+      if (isOwnEye(board, size, x, y, toPlay)) continue;
+      out.push([x, y]);
+    }
+    return out;
+  }
+  // 影响力图：每个棋子对周围格子施加衰减影响
+  function influenceMap(board, size) {
+    const inf = new Float32Array(size * size);
+    for (let i = 0; i < size * size; i++) {
+      if (board[i] === 0) continue;
+      const sign = board[i] === 1 ? 1 : -1;
+      const x = i % size, y = Math.floor(i / size);
+      // 仅对附近 4 格半径范围施加影响（速度优化）
+      for (let dy = -4; dy <= 4; dy++) for (let dx = -4; dx <= 4; dx++) {
+        const xx = x + dx, yy = y + dy;
+        if (!B.inBounds(size, xx, yy)) continue;
+        const d = Math.abs(dx) + Math.abs(dy);
+        inf[yy * size + xx] += sign * Math.exp(-d * 0.5);
+      }
+    }
+    return inf;
+  }
+  return { isOwnEye, candidateMoves, influenceMap };
+})();
+
+/* ============================================================
+ * AIEasy — 低难度：随机+约束（捕获优先 / 不下己眼）
+ * ============================================================ */
+GoNeon.AIEasy = (() => {
+  const E = GoNeon.Engine;
+  const H = GoNeon.AIHeuristics;
+  function pick(state) {
+    const cands = H.candidateMoves(state);
+    if (cands.length === 0) return { pass: true };
+    // 约束 1：能提子优先
+    for (const [x, y] of cands) {
+      const r = E.tryMove(state, x, y);
+      if (r.ok && (r.next.captures.black + r.next.captures.white) >
+                  (state.captures.black + state.captures.white)) return { x, y };
+    }
+    // 约束 2：合法点中随机
+    const legal = [];
+    for (const [x, y] of cands) {
+      const r = E.tryMove(state, x, y);
+      if (r.ok) legal.push([x, y]);
+    }
+    if (legal.length === 0) return { pass: true };
+    const [x, y] = legal[Math.floor(Math.random() * legal.length)];
+    return { x, y };
+  }
+  return { pick };
+})();
+
+/* ============================================================
+ * AIMedium — 中难度：启发式估值 + 1-ply 选最佳
+ * ============================================================ */
+GoNeon.AIMedium = (() => {
+  const E = GoNeon.Engine;
+  const H = GoNeon.AIHeuristics;
+  const S = GoNeon.Scoring;
+  function evaluate(state) {
+    // 简单实地估算：子数 + 各方影响力总和
+    let black = 0, white = 0;
+    for (let i = 0; i < state.board.length; i++) {
+      if (state.board[i] === 1) black++;
+      else if (state.board[i] === 2) white++;
+    }
+    // 加上单方围地
+    for (const r of S.regions(state.board, state.size)) {
+      if (r.owner === 1) black += r.points.length;
+      else if (r.owner === 2) white += r.points.length;
+    }
+    return black - white;
+  }
+  function pick(state) {
+    const cands = H.candidateMoves(state);
+    if (cands.length === 0) return { pass: true };
+
+    // 用影响力排序，挑出最值得考虑的前 30 个候选点
+    const inf = H.influenceMap(state.board, state.size);
+    cands.sort((a, b) => {
+      const ia = Math.abs(inf[a[1] * state.size + a[0]]);
+      const ib = Math.abs(inf[b[1] * state.size + b[0]]);
+      return ib - ia;
+    });
+    const top = cands.slice(0, Math.min(30, cands.length));
+
+    let bestScore = -Infinity, bestMove = null;
+    const sign = state.toPlay === 1 ? 1 : -1;
+    for (const [x, y] of top) {
+      const r = E.tryMove(state, x, y);
+      if (!r.ok) continue;
+      const captureBonus = ((r.next.captures.black + r.next.captures.white) -
+                            (state.captures.black + state.captures.white)) * 5;
+      const e = sign * evaluate(r.next) + captureBonus;
+      if (e > bestScore) { bestScore = e; bestMove = { x, y }; }
+    }
+    return bestMove || { pass: true };
+  }
+  return { pick };
+})();
+
+/* ============================================================
+ * AIMcts — 高难度：MCTS + UCB1 + 启发式 rollout
+ * ============================================================ */
+GoNeon.AIMcts = (() => {
+  const E = GoNeon.Engine;
+  const H = GoNeon.AIHeuristics;
+  const S = GoNeon.Scoring;
+  const C = 1.41421;
+
+  function makeNode(state, move, parent) {
+    return {
+      state, move, parent,
+      children: [],
+      visits: 0, wins: 0,
+      untried: H.candidateMoves(state).slice(),
+    };
+  }
+
+  function uctSelect(node) {
+    let best = null, bv = -Infinity;
+    for (const c of node.children) {
+      const exploit = c.wins / Math.max(1, c.visits);
+      const explore = C * Math.sqrt(Math.log(node.visits) / Math.max(1, c.visits));
+      const v = exploit + explore;
+      if (v > bv) { bv = v; best = c; }
+    }
+    return best;
+  }
+
+  function expand(node) {
+    while (node.untried.length > 0) {
+      const idx = Math.floor(Math.random() * node.untried.length);
+      const [x, y] = node.untried.splice(idx, 1)[0];
+      const r = E.tryMove(node.state, x, y);
+      if (!r.ok) continue;
+      const child = makeNode(r.next, { x, y }, node);
+      node.children.push(child);
+      return child;
+    }
+    return null;
+  }
+
+  function rollout(state, maxPlies) {
+    let s = state;
+    let consecutivePass = 0;
+    for (let i = 0; i < maxPlies; i++) {
+      if (s.phase !== 'playing') break;
+      const cands = H.candidateMoves(s);
+      if (cands.length === 0) {
+        s = E.pass(s); consecutivePass++;
+        if (consecutivePass >= 2) break;
+        continue;
+      }
+      let played = false;
+      for (let attempt = 0; attempt < 8; attempt++) {
+        const [x, y] = cands[Math.floor(Math.random() * cands.length)];
+        const r = E.tryMove(s, x, y);
+        if (r.ok) { s = r.next; played = true; consecutivePass = 0; break; }
+      }
+      if (!played) { s = E.pass(s); consecutivePass++; if (consecutivePass >= 2) break; }
+    }
+    return s;
+  }
+
+  function backprop(node, blackWon) {
+    let n = node;
+    while (n) {
+      n.visits++;
+      // 若当前节点是某方的回合（toPlay），则上一步是对方走的；
+      // 上一步走子方赢则该节点 wins 增加。
+      const moverWasBlack = n.state.toPlay === 2;
+      if ((moverWasBlack && blackWon) || (!moverWasBlack && !blackWon)) n.wins++;
+      n = n.parent;
+    }
+  }
+
+  async function pick(state, opts = {}) {
+    const sims = opts.simulations ||
+      (state.size === 9 ? 800 : state.size === 13 ? 1500 : 2000);
+    const yieldEvery = 50;
+    const root = makeNode(state, null, null);
+
+    for (let i = 0; i < sims; i++) {
+      if (opts.signal && opts.signal.aborted) break;
+
+      // 1. 选择
+      let node = root;
+      while (node.untried.length === 0 && node.children.length > 0) {
+        node = uctSelect(node);
+      }
+      // 2. 扩展
+      if (node.untried.length > 0) {
+        const c = expand(node);
+        if (c) node = c;
+      }
+      // 3. 模拟
+      const final = rollout(node.state, state.size * state.size);
+      const result = S.score(final);
+      const blackWon = result.winner === 1;
+      // 4. 反传
+      backprop(node, blackWon);
+
+      if (i % yieldEvery === 0) {
+        if (opts.onProgress) opts.onProgress(i / sims);
+        await new Promise(r => requestAnimationFrame(r));
+      }
+    }
+    if (opts.onProgress) opts.onProgress(1);
+
+    if (root.children.length === 0) return { pass: true };
+    let best = root.children[0];
+    for (const c of root.children) if (c.visits > best.visits) best = c;
+    return best.move ? { x: best.move.x, y: best.move.y } : { pass: true };
+  }
+
+  return { pick };
+})();
+
+/* ============================================================
+ * AIRunner — 三档统一入口 + 取消控制器
+ * ============================================================ */
+GoNeon.AIRunner = (() => {
+  function makeController() {
+    let aborted = false;
+    return {
+      signal: { get aborted() { return aborted; } },
+      abort() { aborted = true; },
+    };
+  }
+  async function think(state, level, opts = {}) {
+    if (level === 'low') {
+      // 不阻塞 UI：让出一次
+      await new Promise(r => setTimeout(r, 0));
+      return GoNeon.AIEasy.pick(state);
+    }
+    if (level === 'medium') {
+      await new Promise(r => setTimeout(r, 0));
+      return GoNeon.AIMedium.pick(state);
+    }
+    if (level === 'high') return await GoNeon.AIMcts.pick(state, opts);
+    throw new Error('unknown level: ' + level);
+  }
+  return { think, makeController };
+})();
+
+/* ============================================================
+ * Theme — 暗夜霓虹色板
+ * ============================================================ */
+GoNeon.Theme = {
+  bgGradient: ['#0a0e27', '#1a1147'],
+  boardBg: 'rgba(20,30,80,0.85)',
+  gridLine: 'rgba(120,180,255,0.7)',
+  starPoint: 'rgba(120,180,255,1)',
+  coordText: 'rgba(160,200,255,0.7)',
+  blackStoneCenter: '#7090ff',
+  blackStoneEdge: '#000020',
+  blackStoneGlow: 'rgba(64,96,255,0.9)',
+  whiteStoneCenter: '#ffffff',
+  whiteStoneEdge: '#6090c0',
+  whiteStoneGlow: 'rgba(170,200,255,0.9)',
+  lastMoveRing: 'rgba(255,255,255,0.95)',
+  hoverGhost: 'rgba(120,180,255,0.4)',
+  rippleColor: 'rgba(120,180,255,0.7)',
+  stoneGlowBlur: 14,
+  gridGlowBlur: 6,
+};
+
+/* ============================================================
+ * BoardLayer — 底层（背景渐变 + 发光网格 + 星位 + 坐标）
+ * ============================================================ */
+GoNeon.BoardLayer = (() => {
+  const T = GoNeon.Theme;
+  function starPointsFor(size) {
+    if (size === 9) return [[2, 2], [6, 2], [4, 4], [2, 6], [6, 6]];
+    if (size === 13) return [[3, 3], [9, 3], [6, 6], [3, 9], [9, 9]];
+    if (size === 19) return [[3, 3], [9, 3], [15, 3], [3, 9], [9, 9], [15, 9], [3, 15], [9, 15], [15, 15]];
+    return [];
+  }
+  function draw(ctx, opts) {
+    const { size, cellPx, padPx } = opts;
+    const total = padPx * 2 + cellPx * (size - 1);
+    // 背景径向渐变，营造深空感
+    const g = ctx.createRadialGradient(total/2, total/2, total*0.1, total/2, total/2, total*0.7);
+    g.addColorStop(0, '#1a2050');
+    g.addColorStop(1, T.bgGradient[0]);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, total, total);
+
+    // 内棋盘面板（更深的蓝）
+    const innerInset = padPx * 0.4;
+    ctx.fillStyle = T.boardBg;
+    ctx.fillRect(innerInset, innerInset, total - innerInset * 2, total - innerInset * 2);
+
+    // 内边框光晕
+    ctx.strokeStyle = 'rgba(120,180,255,0.3)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(innerInset, innerInset, total - innerInset * 2, total - innerInset * 2);
+
+    // 网格（带发光）
+    ctx.shadowBlur = T.gridGlowBlur;
+    ctx.shadowColor = T.gridLine;
+    ctx.strokeStyle = T.gridLine;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let i = 0; i < size; i++) {
+      const p = padPx + i * cellPx;
+      ctx.moveTo(padPx, p); ctx.lineTo(padPx + cellPx * (size - 1), p);
+      ctx.moveTo(p, padPx); ctx.lineTo(p, padPx + cellPx * (size - 1));
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // 星位
+    ctx.fillStyle = T.starPoint;
+    ctx.shadowBlur = 6;
+    ctx.shadowColor = T.starPoint;
+    for (const [sx, sy] of starPointsFor(size)) {
+      const px = padPx + sx * cellPx, py = padPx + sy * cellPx;
+      ctx.beginPath(); ctx.arc(px, py, Math.max(2.5, cellPx * 0.09), 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.shadowBlur = 0;
+
+    // 坐标
+    ctx.fillStyle = T.coordText;
+    ctx.font = `${Math.max(10, Math.floor(cellPx * 0.32))}px ui-sans-serif, system-ui`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const letters = 'ABCDEFGHJKLMNOPQRST';
+    for (let i = 0; i < size; i++) {
+      const px = padPx + i * cellPx;
+      ctx.fillText(letters[i], px, padPx * 0.45);
+      ctx.fillText(letters[i], px, total - padPx * 0.45);
+      const py = padPx + i * cellPx;
+      ctx.fillText(String(size - i), padPx * 0.45, py);
+      ctx.fillText(String(size - i), total - padPx * 0.45, py);
+    }
+  }
+  return { draw, starPointsFor };
+})();
+
+/* ============================================================
+ * StoneLayer — 棋子层（蓝紫径向渐变 + 光晕）
+ * ============================================================ */
+GoNeon.StoneLayer = (() => {
+  const T = GoNeon.Theme;
+  function drawStone(ctx, x, y, color, cellPx, padPx, alpha = 1) {
+    const px = padPx + x * cellPx, py = padPx + y * cellPx;
+    const r = cellPx * 0.46;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    const grad = ctx.createRadialGradient(px - r * 0.3, py - r * 0.3, r * 0.1, px, py, r);
+    if (color === 1) {
+      grad.addColorStop(0, T.blackStoneCenter);
+      grad.addColorStop(0.6, '#1020a0');
+      grad.addColorStop(1, T.blackStoneEdge);
+      ctx.shadowColor = T.blackStoneGlow;
+    } else {
+      grad.addColorStop(0, T.whiteStoneCenter);
+      grad.addColorStop(0.6, '#d0e8ff');
+      grad.addColorStop(1, T.whiteStoneEdge);
+      ctx.shadowColor = T.whiteStoneGlow;
+    }
+    ctx.shadowBlur = T.stoneGlowBlur;
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+  function drawAll(ctx, opts) {
+    const { board, size, cellPx, padPx, total } = opts;
+    ctx.clearRect(0, 0, total, total);
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+      const v = board[y * size + x];
+      if (v !== 0) drawStone(ctx, x, y, v, cellPx, padPx);
+    }
+  }
+  return { drawAll, drawStone };
+})();
+
+/* ============================================================
+ * FxLayer — 特效层（hover、最后一手脉冲、落子涟漪）
+ * ============================================================ */
+GoNeon.FxLayer = (() => {
+  const T = GoNeon.Theme;
+  let ripples = [];
+  function clear(ctx, total) { ctx.clearRect(0, 0, total, total); }
+  function drawHover(ctx, x, y, color, cellPx, padPx) {
+    if (x < 0 || y < 0) return;
+    const px = padPx + x * cellPx, py = padPx + y * cellPx;
+    const r = cellPx * 0.46;
+    ctx.save();
+    ctx.globalAlpha = 0.4;
+    const grad = ctx.createRadialGradient(px - r * 0.3, py - r * 0.3, r * 0.1, px, py, r);
+    if (color === 1) {
+      grad.addColorStop(0, T.blackStoneCenter);
+      grad.addColorStop(1, T.blackStoneEdge);
+    } else {
+      grad.addColorStop(0, T.whiteStoneCenter);
+      grad.addColorStop(1, T.whiteStoneEdge);
+    }
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+  function drawLastMove(ctx, x, y, cellPx, padPx, t) {
+    if (x < 0 || y < 0) return;
+    const px = padPx + x * cellPx, py = padPx + y * cellPx;
+    const r = cellPx * 0.46;
+    const pulse = 0.7 + 0.3 * Math.sin(t * 0.005);
+    ctx.save();
+    ctx.strokeStyle = T.lastMoveRing;
+    ctx.lineWidth = Math.max(1, cellPx * 0.06) * pulse;
+    ctx.shadowColor = T.lastMoveRing; ctx.shadowBlur = 8 * pulse;
+    ctx.beginPath(); ctx.arc(px, py, r * 0.55, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+  }
+  function spawnRipple(x, y) { ripples.push({ x, y, age: 0 }); }
+  function drawRipples(ctx, cellPx, padPx) {
+    ripples = ripples.filter(r => r.age < 30);
+    for (const r of ripples) {
+      r.age += 1;
+      const px = padPx + r.x * cellPx, py = padPx + r.y * cellPx;
+      const radius = cellPx * 0.46 * (1 + r.age * 0.05);
+      const alpha = 1 - r.age / 30;
+      ctx.save();
+      ctx.strokeStyle = `rgba(120,180,255,${alpha * 0.8})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(px, py, radius, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+    }
+  }
+  function reset() { ripples = []; }
+  return { clear, drawHover, drawLastMove, spawnRipple, drawRipples, reset };
+})();
+
+/* ============================================================
+ * BoardRenderer — 三层 Canvas 组合 + 输入处理
+ * ============================================================ */
+GoNeon.BoardRenderer = (() => {
+  const Bd = GoNeon.BoardLayer;
+  const Sl = GoNeon.StoneLayer;
+  const Fx = GoNeon.FxLayer;
+  function create(container, { size }) {
+    container.innerHTML = '';
+    const layers = ['board', 'stones', 'fx'].map(name => {
+      const c = document.createElement('canvas');
+      c.dataset.layer = name;
+      container.appendChild(c);
+      return c;
+    });
+    const [bdC, stC, fxC] = layers;
+
+    let cellPx = 0, padPx = 0, total = 0;
+    let curBoard = new Int8Array(size * size);
+    let lastMove = null;
+    let hoverPos = { x: -1, y: -1 };
+    let hoverColor = 1;
+    let onPlay = () => {};
+    let overlayDraw = null; // optional extra rendering on fx layer (scoring)
+
+    function resize(w, h) {
+      const dpr = window.devicePixelRatio || 1;
+      const px = Math.min(w, h);
+      cellPx = Math.floor((px * 0.92) / size);
+      if (cellPx < 12) cellPx = 12;
+      padPx = Math.floor(cellPx * 1.2);
+      total = padPx * 2 + cellPx * (size - 1);
+      container.style.width = total + 'px';
+      container.style.height = total + 'px';
+      for (const c of layers) {
+        c.width = total * dpr;
+        c.height = total * dpr;
+        c.style.width = total + 'px';
+        c.style.height = total + 'px';
+        const g = c.getContext('2d');
+        g.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+      Bd.draw(bdC.getContext('2d'), { size, cellPx, padPx });
+      Sl.drawAll(stC.getContext('2d'), { board: curBoard, size, cellPx, padPx, total });
+    }
+    function render(state) {
+      curBoard = state.board;
+      lastMove = state.moveLog.length ? state.moveLog[state.moveLog.length - 1] : null;
+      Sl.drawAll(stC.getContext('2d'), { board: curBoard, size, cellPx, padPx, total });
+    }
+    function pickCoord(e) {
+      const rect = fxC.getBoundingClientRect();
+      const px = e.clientX - rect.left, py = e.clientY - rect.top;
+      const x = Math.round((px - padPx) / cellPx);
+      const y = Math.round((py - padPx) / cellPx);
+      if (x >= 0 && x < size && y >= 0 && y < size) return { x, y };
+      return null;
+    }
+    fxC.addEventListener('mousemove', e => {
+      const c = pickCoord(e);
+      hoverPos = c || { x: -1, y: -1 };
+    });
+    fxC.addEventListener('mouseleave', () => { hoverPos = { x: -1, y: -1 }; });
+    fxC.addEventListener('click', e => { const c = pickCoord(e); if (c) onPlay(c); });
+    // touch
+    fxC.addEventListener('touchend', e => {
+      if (e.changedTouches.length === 0) return;
+      e.preventDefault();
+      const t = e.changedTouches[0];
+      const fakeEvt = { clientX: t.clientX, clientY: t.clientY };
+      const c = pickCoord(fakeEvt);
+      if (c) onPlay(c);
+    });
+
+    let rafId = null;
+    function tick(t) {
+      const ctx = fxC.getContext('2d');
+      Fx.clear(ctx, total);
+      if (overlayDraw) overlayDraw(ctx);
+      Fx.drawHover(ctx, hoverPos.x, hoverPos.y, hoverColor, cellPx, padPx);
+      if (lastMove && !lastMove.pass) {
+        Fx.drawLastMove(ctx, lastMove.x, lastMove.y, cellPx, padPx, t);
+      }
+      Fx.drawRipples(ctx, cellPx, padPx);
+      rafId = requestAnimationFrame(tick);
+    }
+    rafId = requestAnimationFrame(tick);
+
+    function destroy() { if (rafId) cancelAnimationFrame(rafId); }
+
+    return {
+      resize, render,
+      onPlay(fn) { onPlay = fn; },
+      setHoverColor(c) { hoverColor = c; },
+      ripple(x, y) { Fx.spawnRipple(x, y); },
+      setOverlay(fn) { overlayDraw = fn; },
+      getMetrics() { return { cellPx, padPx, total }; },
+      destroy,
+    };
+  }
+  return { create };
+})();
+
+/* ============================================================
+ * AudioFx — Web Audio + 合成回退
+ * （未提供 base64 资产时，使用 OfflineAudioContext 现场合成）
+ * ============================================================ */
+GoNeon.AudioFx = (() => {
+  let ctx = null;
+  const buffers = {};
+  let muted = false;
+  let volume = 0.7;
+  let initialized = false;
+
+  function synthesize(ctx, kind) {
+    const sr = ctx.sampleRate;
+    const dur = kind === 'win' ? 1.0 : kind === 'start' ? 0.5 : kind === 'capture' ? 0.25 : 0.08;
+    const buf = ctx.createBuffer(1, Math.floor(sr * dur), sr);
+    const ch = buf.getChannelData(0);
+    if (kind === 'place') {
+      // 短脆"哒"声：噪声爆发 + 快速衰减
+      for (let i = 0; i < ch.length; i++) {
+        const env = Math.exp(-i / (sr * 0.015));
+        ch[i] = ((Math.random() * 2 - 1) * 0.5 + Math.sin(2 * Math.PI * 1800 * i / sr) * 0.5) * env * 0.6;
+      }
+    } else if (kind === 'capture') {
+      // 三连脆响
+      for (let burst = 0; burst < 3; burst++) {
+        const off = Math.floor(burst * sr * 0.06);
+        for (let i = 0; i < sr * 0.05; i++) {
+          if (off + i >= ch.length) break;
+          const env = Math.exp(-i / (sr * 0.012));
+          ch[off + i] += ((Math.random() * 2 - 1) * 0.5 +
+                          Math.sin(2 * Math.PI * (1500 + burst * 200) * i / sr) * 0.5) * env * 0.5;
+        }
+      }
+    } else if (kind === 'start') {
+      // 短钟声扫频
+      for (let i = 0; i < ch.length; i++) {
+        const t = i / sr;
+        const f = 660 + 200 * Math.exp(-t * 4);
+        ch[i] = Math.sin(2 * Math.PI * f * t) * Math.exp(-t * 3) * 0.4;
+      }
+    } else if (kind === 'win') {
+      // 三和弦铃铛
+      for (let i = 0; i < ch.length; i++) {
+        const t = i / sr;
+        const env = Math.exp(-t * 1.6);
+        ch[i] = (Math.sin(2 * Math.PI * 523 * t) +
+                 0.6 * Math.sin(2 * Math.PI * 659 * t) +
+                 0.4 * Math.sin(2 * Math.PI * 784 * t)) * env * 0.3;
+      }
+    }
+    return buf;
+  }
+
+  async function init() {
+    if (initialized) return;
+    try {
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      if (ctx.state === 'suspended') await ctx.resume();
+      for (const k of ['place', 'capture', 'start', 'win']) {
+        buffers[k] = synthesize(ctx, k);
+      }
+      initialized = true;
+    } catch (e) {
+      console.warn('AudioFx init failed:', e);
+    }
+  }
+  function play(kind) {
+    if (muted || !ctx || !buffers[kind]) return;
+    try {
+      const src = ctx.createBufferSource();
+      src.buffer = buffers[kind];
+      const gain = ctx.createGain();
+      gain.gain.value = volume;
+      src.connect(gain).connect(ctx.destination);
+      src.start();
+    } catch {}
+  }
+  function setMuted(m) { muted = m; }
+  function setVolume(v) { volume = Math.max(0, Math.min(1, v)); }
+  return { init, play, setMuted, setVolume };
+})();
+
+/* ============================================================
+ * MenuUI — 主菜单
+ * ============================================================ */
+GoNeon.MenuUI = (() => {
+  function render(host, { onStart, onLoadSgf, onContinue }) {
+    const saved = GoNeon.Storage.loadCurrent();
+    const cont = saved ? `<button id="m-continue" style="background:rgba(96,255,128,0.25)">▶ 继续上一局</button>` : '';
+    host.innerHTML = `
+      <h1>⚪ GoNeon · 围棋</h1>
+      <div class="menu-row"><span class="label">棋盘</span>
+        <div class="opt-group" data-group="size">
+          <button class="opt-btn" data-v="9">9 路</button>
+          <button class="opt-btn active" data-v="13">13 路</button>
+          <button class="opt-btn" data-v="19">19 路</button>
+        </div>
+      </div>
+      <div class="menu-row"><span class="label">对手</span>
+        <div class="opt-group" data-group="opp">
+          <button class="opt-btn active" data-v="ai">人 vs AI</button>
+          <button class="opt-btn" data-v="pvp">人 vs 人</button>
+        </div>
+      </div>
+      <div class="menu-row" id="ai-row"><span class="label">难度</span>
+        <div class="opt-group" data-group="lvl">
+          <button class="opt-btn" data-v="low">低</button>
+          <button class="opt-btn active" data-v="medium">中</button>
+          <button class="opt-btn" data-v="high">高</button>
+        </div>
+      </div>
+      <div class="menu-row"><span class="label">执子</span>
+        <div class="opt-group" data-group="my">
+          <button class="opt-btn active" data-v="black">黑</button>
+          <button class="opt-btn" data-v="white">白</button>
+          <button class="opt-btn" data-v="random">随机</button>
+        </div>
+      </div>
+      <div class="menu-row"><span class="label">贴目</span>
+        <input type="number" id="m-komi" value="7.5" step="0.5" style="width:90px">
+      </div>
+      <div class="menu-actions">
+        <button id="m-start">开始对局</button>
+        <button id="m-load">载入棋谱</button>
+        ${cont}
+      </div>
+    `;
+    // 选项按钮：互斥点击
+    host.querySelectorAll('.opt-group').forEach(g => {
+      g.addEventListener('click', e => {
+        const t = e.target.closest('.opt-btn');
+        if (!t) return;
+        g.querySelectorAll('.opt-btn').forEach(b => b.classList.remove('active'));
+        t.classList.add('active');
+        // 切换对手时显隐难度行
+        if (g.dataset.group === 'opp') {
+          host.querySelector('#ai-row').style.display = (t.dataset.v === 'ai') ? '' : 'none';
+        }
+      });
+    });
+    function val(group) {
+      return host.querySelector(`[data-group="${group}"] .opt-btn.active`).dataset.v;
+    }
+    host.querySelector('#m-start').onclick = () => onStart({
+      size: parseInt(val('size'), 10),
+      opponent: val('opp'),
+      level: val('lvl'),
+      myColor: val('my'),
+      komi: parseFloat(host.querySelector('#m-komi').value) || 7.5,
+    });
+    host.querySelector('#m-load').onclick = () => onLoadSgf();
+    if (saved) host.querySelector('#m-continue').onclick = () => onContinue(saved);
+  }
+  return { render };
+})();
+
+/* ============================================================
+ * SidebarUI — 侧栏（玩家卡 / 计时 / 按钮 / 胜率 / 棋谱）
+ * ============================================================ */
+GoNeon.SidebarUI = (() => {
+  function render(host, { blackName, whiteName, hasAi, callbacks }) {
+    host.innerHTML = `
+      <div class="player-card" id="p-black">
+        <div class="pn">◐ 黑方 · <span id="n-black">${blackName}</span></div>
+        <div class="pi">
+          <span>时间 <b id="t-black">00:00</b></span>
+          <span>提子 <b id="c-black">0</b></span>
+        </div>
+        <div class="thinking" id="th-black"></div>
+        <div class="thinking-bar" id="tb-black-wrap" style="display:none">
+          <div class="thinking-fill" id="tb-black" style="width:0%"></div>
+        </div>
+      </div>
+      <div class="player-card" id="p-white">
+        <div class="pn">◑ 白方 · <span id="n-white">${whiteName}</span></div>
+        <div class="pi">
+          <span>时间 <b id="t-white">00:00</b></span>
+          <span>提子 <b id="c-white">0</b></span>
+        </div>
+        <div class="thinking" id="th-white"></div>
+        <div class="thinking-bar" id="tb-white-wrap" style="display:none">
+          <div class="thinking-fill" id="tb-white" style="width:0%"></div>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button id="b-undo">↶ 悔棋</button>
+        <button id="b-pass">▶ Pass</button>
+        <button id="b-resign">🚩 认输</button>
+      </div>
+      <div class="btn-row">
+        <button id="b-save">💾 保存SGF</button>
+        <button id="b-load">📂 载入SGF</button>
+      </div>
+      <div id="winrate-card" style="display:none">
+        <div>黑方胜率 <b id="wr-text">--</b></div>
+        <div id="winrate-bar"><div id="winrate-fill" style="width:50%"></div></div>
+      </div>
+      <div id="move-log">
+        <span class="label">第 <b id="m-num">0</b> 手 · </span><span id="m-side">黑先</span>
+      </div>
+    `;
+    const $ = id => host.querySelector('#' + id);
+    $('b-undo').onclick = () => callbacks.onUndo();
+    $('b-pass').onclick = () => callbacks.onPass();
+    $('b-resign').onclick = () => callbacks.onResign();
+    $('b-save').onclick = () => callbacks.onSaveSgf();
+    $('b-load').onclick = () => callbacks.onLoadSgf();
+
+    return {
+      update(state) {
+        $('p-black').classList.toggle('active', state.toPlay === 1 && state.phase === 'playing');
+        $('p-white').classList.toggle('active', state.toPlay === 2 && state.phase === 'playing');
+        $('c-black').textContent = state.captures.black;
+        $('c-white').textContent = state.captures.white;
+        $('m-num').textContent = state.moveLog.length;
+        $('m-side').textContent = state.phase === 'playing'
+          ? (state.toPlay === 1 ? '轮到黑方' : '轮到白方')
+          : (state.phase === 'scoring' ? '数子中…' : '对局结束');
+      },
+      setTime(color, ms) {
+        const id = color === 1 ? 't-black' : 't-white';
+        const sec = Math.floor(ms / 1000);
+        $(id).textContent = String(Math.floor(sec / 60)).padStart(2, '0') + ':' + String(sec % 60).padStart(2, '0');
+      },
+      setThinking(color, progress) {
+        const idTxt = color === 1 ? 'th-black' : 'th-white';
+        const idBarWrap = color === 1 ? 'tb-black-wrap' : 'tb-white-wrap';
+        const idBar = color === 1 ? 'tb-black' : 'tb-white';
+        if (progress === null) {
+          $(idTxt).textContent = '';
+          $(idBarWrap).style.display = 'none';
+        } else {
+          $(idTxt).textContent = `思考中 ${Math.round(progress * 100)}%`;
+          $(idBarWrap).style.display = '';
+          $(idBar).style.width = (progress * 100) + '%';
+        }
+      },
+      setWinrate(rate) {
+        const card = $('winrate-card');
+        if (rate === null || rate === undefined) {
+          card.style.display = 'none';
+        } else {
+          card.style.display = '';
+          $('wr-text').textContent = Math.round(rate * 100) + '%';
+          host.querySelector('#winrate-fill').style.width = (rate * 100) + '%';
+        }
+      },
+      setNames(b, w) { $('n-black').textContent = b; $('n-white').textContent = w; },
+      replaceWithReplay(totalMoves, callbacks) {
+        // 把整个 sidebar 替换成回放界面
+        host.innerHTML = `
+          <div id="replay-ui">
+            <h3 style="margin:0 0 8px">📺 回放</h3>
+            <div class="center">第 <b id="rp-cur">0</b> / <b>${totalMoves}</b> 手</div>
+            <input type="range" id="rp-slider" min="0" max="${totalMoves}" value="0">
+            <div class="btn-row">
+              <button id="rp-first">⏮</button>
+              <button id="rp-prev">◀</button>
+              <button id="rp-play">▶</button>
+              <button id="rp-next">▶▶</button>
+              <button id="rp-last">⏭</button>
+            </div>
+            <div class="btn-row">
+              <span style="flex:1;line-height:30px">速度</span>
+              <select id="rp-speed">
+                <option value="1500">0.5x</option>
+                <option value="700" selected>1x</option>
+                <option value="350">2x</option>
+                <option value="150">4x</option>
+              </select>
+            </div>
+            <div class="btn-row">
+              <button id="rp-save">💾 保存SGF</button>
+              <button id="rp-exit">✚ 新对局</button>
+            </div>
+          </div>
+        `;
+        let cur = 0, playing = false, timer = null, speed = 700;
+        const $ = id => host.querySelector('#' + id);
+        function setCur(n) {
+          cur = Math.max(0, Math.min(totalMoves, n));
+          $('rp-cur').textContent = cur;
+          $('rp-slider').value = cur;
+          callbacks.onSeek(cur);
+        }
+        function play() {
+          if (playing) return;
+          playing = true; $('rp-play').textContent = '⏸';
+          timer = setInterval(() => {
+            if (cur >= totalMoves) { stop(); return; }
+            setCur(cur + 1);
+          }, speed);
+        }
+        function stop() {
+          playing = false; $('rp-play').textContent = '▶';
+          if (timer) clearInterval(timer); timer = null;
+        }
+        $('rp-first').onclick = () => setCur(0);
+        $('rp-prev').onclick = () => setCur(cur - 1);
+        $('rp-next').onclick = () => setCur(cur + 1);
+        $('rp-last').onclick = () => setCur(totalMoves);
+        $('rp-play').onclick = () => playing ? stop() : play();
+        $('rp-slider').oninput = e => { stop(); setCur(parseInt(e.target.value, 10)); };
+        $('rp-speed').onchange = e => { speed = parseInt(e.target.value, 10); if (playing) { stop(); play(); } };
+        $('rp-save').onclick = () => callbacks.onSaveSgf();
+        $('rp-exit').onclick = () => { stop(); callbacks.onExit(); };
+        // 末手开始
+        setCur(totalMoves);
+        // 键盘
+        const keyHandler = e => {
+          if (e.key === 'ArrowLeft') { stop(); setCur(cur - 1); }
+          else if (e.key === 'ArrowRight') { stop(); setCur(cur + 1); }
+          else if (e.key === ' ') { e.preventDefault(); playing ? stop() : play(); }
+        };
+        document.addEventListener('keydown', keyHandler);
+        return { keyHandler };
+      },
+    };
+  }
+  return { render };
+})();
+
+/* ============================================================
+ * App — 控制器：连接所有模块
+ * ============================================================ */
+GoNeon.App = (() => {
+  const E = GoNeon.Engine;
+  const SGF = GoNeon.SGF;
+  const AI = GoNeon.AIRunner;
+  const Audio = GoNeon.AudioFx;
+  const Storage = GoNeon.Storage;
+  const Scoring = GoNeon.Scoring;
+
+  let mode = 'menu';
+  let state = null;
+  let cfg = null;
+  let aiCtl = null;
+  let renderer = null;
+  let sidebar = null;
+  let timers = { black: 0, white: 0 };
+  let timerInterval = null;
+  let timerLastTick = 0;
+  let replayKeyHandler = null;
+
+  const $ = id => document.getElementById(id);
+
+  function showToast(text, isError = true) {
+    const t = document.createElement('div');
+    t.textContent = text;
+    t.className = 'toast';
+    if (!isError) t.style.background = 'rgba(96,160,96,0.9)';
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 1800);
+  }
+
+  function showMenu() {
+    mode = 'menu';
+    cleanupGame();
+    $('menu').style.display = '';
+    $('game').classList.remove('active');
+    GoNeon.MenuUI.render($('menu'), {
+      onStart: c => startGame(c),
+      onLoadSgf: () => loadSgfFile().then(s => {
+        if (!s) return;
+        cfg = { size: s.size, opponent: 'pvp', level: 'medium', myColor: 'black', komi: s.komi };
+        state = s;
+        enterGame(true); // 进入回放模式
+      }),
+      onContinue: saved => {
+        try {
+          state = SGF.parse(saved.sgf);
+          cfg = saved.config;
+          enterGame(false);
+          showToast('已恢复上一局', false);
+        } catch (e) {
+          showToast('恢复失败：' + e.message);
+        }
+      },
+    });
+  }
+
+  function cleanupGame() {
+    if (timerInterval) clearInterval(timerInterval);
+    timerInterval = null;
+    if (renderer) { renderer.destroy(); renderer = null; }
+    if (aiCtl) { aiCtl.abort(); aiCtl = null; }
+    if (replayKeyHandler) {
+      document.removeEventListener('keydown', replayKeyHandler);
+      replayKeyHandler = null;
+    }
+    GoNeon.FxLayer.reset();
+  }
+
+  function startGame(newCfg) {
+    cleanupGame();
+    cfg = { ...newCfg };
+    if (cfg.myColor === 'random') cfg.myColor = Math.random() < 0.5 ? 'black' : 'white';
+    state = E.createGame({ size: cfg.size, komi: cfg.komi });
+    timers = { black: 0, white: 0 };
+    enterGame(false);
+    Audio.play('start');
+    if (cfg.opponent === 'ai') {
+      const myCol = cfg.myColor === 'black' ? 1 : 2;
+      if (state.toPlay !== myCol) aiTurn();
+    }
+  }
+
+  function enterGame(replayOnly) {
+    mode = replayOnly ? 'replay' : 'playing';
+    $('menu').style.display = 'none';
+    $('game').classList.add('active');
+    $('game').innerHTML = `
+      <div id="board-wrap"><div id="board-host"></div></div>
+      <div id="sidebar"></div>
+    `;
+    const boardHost = $('board-host');
+    renderer = GoNeon.BoardRenderer.create(boardHost, { size: cfg.size });
+    layoutBoard();
+    window.addEventListener('resize', layoutBoard);
+    renderer.render(state);
+    renderer.setHoverColor(state.toPlay);
+    renderer.onPlay(({ x, y }) => onUserPlay(x, y));
+
+    const blackName = cfg.opponent === 'ai' && cfg.myColor === 'white' ? `AI · ${levelName(cfg.level)}` : '玩家';
+    const whiteName = cfg.opponent === 'ai' && cfg.myColor === 'black' ? `AI · ${levelName(cfg.level)}` : (cfg.opponent === 'pvp' ? '玩家' : '玩家');
+    sidebar = GoNeon.SidebarUI.render($('sidebar'), {
+      blackName, whiteName,
+      hasAi: cfg.opponent === 'ai',
+      callbacks: {
+        onUndo: userUndo,
+        onPass: () => userPlay({ pass: true }),
+        onResign: () => {
+          if (mode !== 'playing') return;
+          state = E.resign(state, state.toPlay);
+          render(); enterScoring(true);
+        },
+        onSaveSgf: saveSgfFile,
+        onLoadSgf: () => loadSgfFile().then(s => {
+          if (s) { state = s; render(); }
+        }),
+      },
+    });
+    sidebar.update(state);
+    if (replayOnly) {
+      // 直接进入回放模式
+      enterReplay();
+    } else {
+      startTimer();
+    }
+  }
+
+  function levelName(l) { return l === 'low' ? '低' : l === 'medium' ? '中' : '高'; }
+
+  function layoutBoard() {
+    const wrap = $('board-wrap');
+    if (!wrap || !renderer) return;
+    const w = wrap.clientWidth;
+    const h = wrap.clientHeight || w;
+    renderer.resize(w, h);
+    renderer.render(state);
+  }
+
+  function startTimer() {
+    if (timerInterval) clearInterval(timerInterval);
+    timerLastTick = Date.now();
+    timerInterval = setInterval(() => {
+      const now = Date.now(), dt = now - timerLastTick;
+      timerLastTick = now;
+      if (!state || state.phase !== 'playing') return;
+      if (state.toPlay === 1) timers.black += dt; else timers.white += dt;
+      if (sidebar) {
+        sidebar.setTime(1, timers.black);
+        sidebar.setTime(2, timers.white);
+      }
+    }, 250);
+  }
+
+  function onUserPlay(x, y) {
+    if (mode !== 'playing') return;
+    if (cfg.opponent === 'ai') {
+      const myCol = cfg.myColor === 'black' ? 1 : 2;
+      if (state.toPlay !== myCol) return;
+    }
+    userPlay({ x, y });
+  }
+
+  function userPlay(move) {
+    if (mode !== 'playing') return;
+    if (move.pass) {
+      state = E.pass(state);
+      Audio.play('place');
+    } else {
+      const r = E.tryMove(state, move.x, move.y);
+      if (!r.ok) {
+        const msg = { ko: '劫争禁同形', suicide: '禁手：自杀', occupied: '该点已有子' }[r.reason] || r.reason;
+        showToast(msg);
+        return;
+      }
+      const captured = (r.next.captures.black + r.next.captures.white) >
+                       (state.captures.black + state.captures.white);
+      state = r.next;
+      Audio.play(captured ? 'capture' : 'place');
+      renderer.ripple(move.x, move.y);
+    }
+    afterMove();
+  }
+
+  function afterMove() {
+    render();
+    autoSave();
+    if (state.phase === 'scoring') { enterScoring(); return; }
+    if (cfg.opponent === 'ai' && mode === 'playing') {
+      const myCol = cfg.myColor === 'black' ? 1 : 2;
+      if (state.toPlay !== myCol) aiTurn();
+    }
+  }
+
+  async function aiTurn() {
+    if (mode !== 'playing') return;
+    const aiColor = state.toPlay;
+    aiCtl = AI.makeController();
+    sidebar.setThinking(aiColor, 0);
+    try {
+      const move = await AI.think(state, cfg.level, {
+        signal: aiCtl.signal,
+        onProgress: p => sidebar.setThinking(aiColor, p),
+      });
+      sidebar.setThinking(aiColor, null);
+      if (aiCtl && aiCtl.signal.aborted) return;
+      aiCtl = null;
+      // AI 不应触发 ko/suicide（候选点已过滤），但仍包一层 try
+      if (move.pass) {
+        state = E.pass(state);
+        Audio.play('place');
+      } else {
+        const r = E.tryMove(state, move.x, move.y);
+        if (!r.ok) {
+          // 极少见：fallback to pass
+          state = E.pass(state);
+        } else {
+          const captured = (r.next.captures.black + r.next.captures.white) >
+                           (state.captures.black + state.captures.white);
+          state = r.next;
+          Audio.play(captured ? 'capture' : 'place');
+          renderer.ripple(move.x, move.y);
+        }
+      }
+      afterMove();
+    } catch (e) {
+      console.error('AI error:', e);
+      sidebar.setThinking(aiColor, null);
+      state = E.pass(state); afterMove();
+    }
+  }
+
+  function userUndo() {
+    if (mode !== 'playing' || state.history.length === 0) return;
+    if (aiCtl) { aiCtl.abort(); aiCtl = null; }
+    sidebar.setThinking(1, null); sidebar.setThinking(2, null);
+    state = E.undo(state);
+    if (cfg.opponent === 'ai' && state.history.length > 0) {
+      const myCol = cfg.myColor === 'black' ? 1 : 2;
+      if (state.toPlay !== myCol) state = E.undo(state); // 把对方上一步也撤掉
+    }
+    render(); autoSave();
+  }
+
+  function render() {
+    renderer.render(state);
+    renderer.setHoverColor(state.toPlay);
+    sidebar.update(state);
+  }
+
+  function enterScoring(skipPause) {
+    mode = 'scoring';
+    if (timerInterval) clearInterval(timerInterval);
+    Audio.play('win');
+    const result = state.phase === 'ended'
+      ? { black: 0, white: 0, winner: state.winner, margin: 0, dead: [] }
+      : Scoring.score(state);
+
+    // 在棋盘上叠加领地与死子标记
+    if (state.phase !== 'ended') {
+      renderer.setOverlay(ctx => drawScoringOverlay(ctx, result));
+    }
+
+    // 弹窗
+    const back = document.createElement('div');
+    back.className = 'modal-back';
+    const reasonTxt = state.endReason === 'resign' ? '认输' : '双方 Pass';
+    const winnerTxt = result.winner === 1 ? '黑胜' : result.winner === 2 ? '白胜' : '和棋';
+    const marginTxt = result.margin && state.phase !== 'ended' ? `（${result.margin.toFixed(1)} 目）` : '';
+    back.innerHTML = `
+      <div class="modal-card">
+        <h2>对局结束 · ${reasonTxt}</h2>
+        <div class="winner">${winnerTxt} ${marginTxt}</div>
+        ${state.phase !== 'ended' ? `
+        <div class="row-score"><span>黑方</span><b>${result.black}</b></div>
+        <div class="row-score"><span>白方（含贴目 ${state.komi}）</span><b>${result.white}</b></div>
+        <div style="opacity:0.6;font-size:13px;margin-top:8px">死子已自动判定 (${result.dead.length} 颗)</div>
+        ` : ''}
+        <div class="btn-row" style="margin-top:20px">
+          <button id="md-replay">📺 进入回放</button>
+          <button id="md-new">✚ 新对局</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(back);
+    back.querySelector('#md-replay').onclick = () => { back.remove(); enterReplay(); };
+    back.querySelector('#md-new').onclick = () => { back.remove(); showMenu(); };
+
+    // 把对局存档到历史
+    try {
+      Storage.appendHistory({ sgf: SGF.write(state), when: Date.now(), result });
+    } catch {}
+    Storage.clearCurrent();
+  }
+
+  function drawScoringOverlay(ctx, result) {
+    const { cellPx, padPx } = renderer.getMetrics();
+    // 领地色块
+    const regs = Scoring.regions(state.board, state.size);
+    for (const r of regs) {
+      if (r.owner === 0) continue;
+      ctx.fillStyle = r.owner === 1 ? 'rgba(96,128,255,0.3)' : 'rgba(220,230,255,0.25)';
+      for (const idx of r.points) {
+        const x = idx % state.size, y = Math.floor(idx / state.size);
+        const px = padPx + x * cellPx, py = padPx + y * cellPx;
+        ctx.fillRect(px - cellPx / 2, py - cellPx / 2, cellPx, cellPx);
+      }
+    }
+    // 死子标 X
+    ctx.strokeStyle = 'rgba(255,80,80,0.95)';
+    ctx.lineWidth = 3;
+    ctx.shadowColor = 'rgba(255,80,80,0.6)'; ctx.shadowBlur = 6;
+    for (const [x, y] of result.dead) {
+      const px = padPx + x * cellPx, py = padPx + y * cellPx;
+      const r = cellPx * 0.3;
+      ctx.beginPath();
+      ctx.moveTo(px - r, py - r); ctx.lineTo(px + r, py + r);
+      ctx.moveTo(px + r, py - r); ctx.lineTo(px - r, py + r);
+      ctx.stroke();
+    }
+    ctx.shadowBlur = 0;
+  }
+
+  function enterReplay() {
+    mode = 'replay';
+    renderer.setOverlay(null);
+    if (timerInterval) clearInterval(timerInterval);
+    const total = state.moveLog.length;
+    const finalState = state;
+    const handle = sidebar.replaceWithReplay(total, {
+      onSeek(n) {
+        let s = E.createGame({ size: cfg.size, komi: cfg.komi });
+        for (let i = 0; i < n; i++) {
+          const m = finalState.moveLog[i];
+          if (m.pass) s = E.pass(s);
+          else {
+            const r = E.tryMove(s, m.x, m.y);
+            if (r.ok) s = r.next;
+          }
+        }
+        renderer.render(s);
+      },
+      onSaveSgf: () => {
+        const text = SGF.write(finalState);
+        downloadText(text, `goneon-${Date.now()}.sgf`);
+      },
+      onExit: () => showMenu(),
+    });
+    replayKeyHandler = handle.keyHandler;
+    state = finalState;
+  }
+
+  function autoSave() {
+    try { Storage.saveCurrent({ sgf: SGF.write(state), config: cfg }); } catch {}
+  }
+
+  function downloadText(text, filename) {
+    const blob = new Blob([text], { type: 'application/x-go-sgf' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  async function saveSgfFile() {
+    const text = SGF.write(state);
+    downloadText(text, `goneon-${Date.now()}.sgf`);
+    showToast('已保存 SGF', false);
+  }
+  function loadSgfFile() {
+    return new Promise(resolve => {
+      const input = document.createElement('input');
+      input.type = 'file'; input.accept = '.sgf,application/x-go-sgf,text/plain';
+      input.onchange = async () => {
+        const file = input.files[0];
+        if (!file) { resolve(null); return; }
+        try {
+          const text = await file.text();
+          resolve(SGF.parse(text));
+        } catch (e) {
+          showToast('棋谱解析失败：' + e.message);
+          resolve(null);
+        }
+      };
+      input.click();
+    });
+  }
+
+  function start() { showMenu(); }
+
+  // 设置面板
+  function bindSettings() {
+    const panel = $('settings-panel');
+    $('btn-settings').onclick = e => {
+      e.stopPropagation();
+      panel.classList.toggle('active');
+    };
+    document.addEventListener('click', e => {
+      if (!panel.contains(e.target) && e.target.id !== 'btn-settings') panel.classList.remove('active');
+    });
+    $('set-sound').onchange = e => Audio.setMuted(!e.target.checked);
+    $('set-volume').oninput = e => Audio.setVolume(parseInt(e.target.value, 10) / 100);
+    $('btn-back-menu').onclick = () => { panel.classList.remove('active'); showMenu(); };
+  }
+
+  return { start, bindSettings };
+})();
+
+/* ============================================================
+ * 启动
+ * ============================================================ */
+(function () {
+  // 首次用户交互后初始化音频（浏览器策略要求）
+  let audioInitDone = false;
+  function tryInitAudio() {
+    if (audioInitDone) return;
+    audioInitDone = true;
+    GoNeon.AudioFx.init();
+  }
+  document.body.addEventListener('click', tryInitAudio, { once: true });
+  document.body.addEventListener('keydown', tryInitAudio, { once: true });
+  document.body.addEventListener('touchstart', tryInitAudio, { once: true });
+
+  GoNeon.App.bindSettings();
+  GoNeon.App.start();
+})();
+</script>
+
+</body>
+</html>

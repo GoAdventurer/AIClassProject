@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>GoNeon · 单测</title>
+<style>
+  body { background: #0a0e27; color: #eaeaea; font-family: ui-monospace, monospace;
+         padding: 16px; white-space: pre; line-height: 1.5; }
+  .pass { color: #6ee7b7; }
+  .fail { color: #ff7070; }
+  .head { color: #aac8ff; font-weight: bold; margin-top: 12px; }
+  .summary { font-size: 18px; margin-top: 16px; padding: 8px 12px; border-radius: 6px; }
+  .summary.ok { background: rgba(96,200,128,0.2); }
+  .summary.bad { background: rgba(200,80,80,0.25); }
+</style>
+</head>
+<body>
+<div id="out">running...</div>
+
+<script>
+/*
+ * 测试运行器：
+ *   - 直接 fetch index.html 的源码，提取其中 GoNeon.* 模块到当前页
+ *   - 由于 index.html 把所有模块挂在一个全局 GoNeon 上，我们用 iframe 加载并复用
+ * 简单做法：用 hidden iframe 加载 index.html，等 GoNeon 全部就绪后跑测试。
+ */
+const out = document.getElementById('out');
+function write(line, cls) {
+  const span = document.createElement('span');
+  if (cls) span.className = cls;
+  span.textContent = line + '\n';
+  out.appendChild(span);
+}
+
+const iframe = document.createElement('iframe');
+iframe.src = '../index.html';
+iframe.style.display = 'none';
+document.body.appendChild(iframe);
+
+iframe.addEventListener('load', async () => {
+  // 等 App 启动 + 模块挂载（App.start 是同步的）
+  const G = iframe.contentWindow.GoNeon;
+  if (!G) { write('FAIL: GoNeon not found in iframe', 'fail'); return; }
+
+  out.innerHTML = '';
+  write('GoNeon 单元测试');
+  write('================');
+
+  const T = makeTester();
+
+  // ===== Engine: createGame =====
+  T.suite('Engine.createGame');
+  T.test('19x19 默认对局', () => {
+    const s = G.Engine.createGame({ size: 19 });
+    T.eq(s.size, 19); T.eq(s.board.length, 361); T.eq(s.toPlay, 1);
+    T.eq(s.komi, 7.5); T.eq(s.phase, 'playing');
+  });
+  T.test('9x9 对局', () => {
+    T.eq(G.Engine.createGame({ size: 9 }).board.length, 81);
+  });
+
+  // ===== Engine: tryMove basic =====
+  T.suite('Engine.tryMove (基础)');
+  T.test('落子并切换轮次', () => {
+    let s = G.Engine.createGame({ size: 9 });
+    const r = G.Engine.tryMove(s, 4, 4);
+    T.ok(r.ok); T.eq(r.next.board[4*9+4], 1); T.eq(r.next.toPlay, 2);
+  });
+  T.test('已占位拒绝', () => {
+    let s = G.Engine.createGame({ size: 9 });
+    s = G.Engine.tryMove(s, 4, 4).next;
+    T.eq(G.Engine.tryMove(s, 4, 4).reason, 'occupied');
+  });
+  T.test('越界拒绝', () => {
+    const s = G.Engine.createGame({ size: 9 });
+    T.eq(G.Engine.tryMove(s, -1, 0).reason, 'out_of_bounds');
+    T.eq(G.Engine.tryMove(s, 9, 0).reason, 'out_of_bounds');
+  });
+
+  // ===== Engine: capture =====
+  T.suite('Engine.tryMove (提子 / 自杀 / 劫争)');
+  function setupBoard(rows, toPlay) {
+    const size = rows.length;
+    const s = G.Engine.createGame({ size });
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+      const c = rows[y][x];
+      if (c === 'B') s.board[y*size+x] = 1;
+      else if (c === 'W') s.board[y*size+x] = 2;
+    }
+    s.toPlay = toPlay;
+    s.hash = G.Zobrist.computeHash(s.zob, s.board);
+    s.seenHashes.set(s.hash, 1);
+    return s;
+  }
+  T.test('提中央单子', () => {
+    // 5x5: 三面已围白子, 黑落最后一气
+    const s = setupBoard([
+      '.....',
+      '..B..',
+      '.BWB.',
+      '.....',
+      '.....',
+    ], 1);
+    const r = G.Engine.tryMove(s, 2, 3);
+    T.ok(r.ok); T.eq(r.next.board[2*5+2], 0); T.eq(r.next.captures.black, 1);
+  });
+  T.test('禁止自杀', () => {
+    const s = setupBoard(['.W.','W.W','.W.'], 1);
+    T.eq(G.Engine.tryMove(s, 1, 1).reason, 'suicide');
+  });
+  T.test('能提子的"自杀形"应允许', () => {
+    // 黑下后能提白，自身有气
+    const s = setupBoard(['B...','.WB.','....','....'], 1);
+    const r = G.Engine.tryMove(s, 0, 1);
+    T.ok(r.ok); T.eq(r.next.board[1*4+1], 0); T.eq(r.next.captures.black, 1);
+  });
+  T.test('基本劫争禁止立即回提', () => {
+    // 5x5 标准劫形
+    let s = G.Engine.createGame({ size: 5 });
+    const place = (xx, yy, c) => s.board[yy*5+xx] = c;
+    place(1,1,1); place(2,1,2);
+    place(0,2,1); place(1,2,2); place(3,2,2);
+    place(1,3,1); place(2,3,2);
+    s.toPlay = 1;
+    s.hash = G.Zobrist.computeHash(s.zob, s.board);
+    s.seenHashes.set(s.hash, 1);
+    const r1 = G.Engine.tryMove(s, 2, 2);
+    T.ok(r1.ok); T.eq(r1.next.board[2*5+1], 0);
+    const r2 = G.Engine.tryMove(r1.next, 1, 2);
+    T.eq(r2.reason, 'ko');
+  });
+
+  // ===== Engine: undo / pass / resign =====
+  T.suite('Engine.undo / pass / resign');
+  T.test('undo 回退一步', () => {
+    let s = G.Engine.createGame({ size: 9 });
+    s = G.Engine.tryMove(s, 4, 4).next;
+    s = G.Engine.tryMove(s, 3, 3).next;
+    const u = G.Engine.undo(s);
+    T.eq(u.board[3*9+3], 0); T.eq(u.board[4*9+4], 1);
+    T.eq(u.toPlay, 2); T.eq(u.history.length, 1); T.eq(u.moveLog.length, 1);
+  });
+  T.test('两次连 pass 进入 scoring', () => {
+    let s = G.Engine.createGame({ size: 9 });
+    s = G.Engine.pass(s); s = G.Engine.pass(s);
+    T.eq(s.phase, 'scoring');
+  });
+  T.test('resign 结束对局', () => {
+    let s = G.Engine.createGame({ size: 9 });
+    s = G.Engine.resign(s, 1);
+    T.eq(s.phase, 'ended'); T.eq(s.winner, 2);
+  });
+
+  // ===== Scoring =====
+  T.suite('Scoring');
+  T.test('简单领地划分（5x5 各占一半）', () => {
+    const s = G.Engine.createGame({ size: 5 });
+    for (let y = 0; y < 5; y++) {
+      s.board[y*5+0] = 1; s.board[y*5+1] = 1;
+      s.board[y*5+3] = 2; s.board[y*5+4] = 2;
+    }
+    const r = G.Scoring.score(s);
+    T.eq(r.black, 10); T.eq(r.white, 17.5); T.eq(r.winner, 2);
+  });
+  T.test('lone 白子在黑围中应判死', () => {
+    const s = G.Engine.createGame({ size: 5 });
+    // 黑壁内有一颗白子
+    const set = (x, y, c) => s.board[y*5+x] = c;
+    for (let i = 0; i < 5; i++) { set(i, 0, 1); set(i, 4, 1); set(0, i, 1); set(4, i, 1); }
+    set(2, 2, 2);
+    const dead = G.Scoring.detectDeadStones(s);
+    T.eq(dead.length, 1);
+  });
+
+  // ===== SGF =====
+  T.suite('SGF');
+  T.test('write 包含 SZ/KM/RU', () => {
+    const s = G.Engine.createGame({ size: 19 });
+    const out = G.SGF.write(s);
+    T.ok(out.startsWith('(;'));
+    T.ok(out.includes('SZ[19]'));
+    T.ok(out.includes('KM[7.5]'));
+    T.ok(out.includes('RU[Chinese]'));
+  });
+  T.test('write 编码坐标 a-s', () => {
+    let s = G.Engine.createGame({ size: 9 });
+    s = G.Engine.tryMove(s, 0, 0).next;
+    s = G.Engine.tryMove(s, 8, 8).next;
+    const out = G.SGF.write(s);
+    T.ok(out.includes(';B[aa]')); T.ok(out.includes(';W[ii]'));
+  });
+  T.test('write pass 为空括号', () => {
+    let s = G.Engine.createGame({ size: 9 });
+    s = G.Engine.pass(s);
+    T.ok(G.SGF.write(s).includes(';B[]'));
+  });
+  T.test('round-trip', () => {
+    let s = G.Engine.createGame({ size: 9 });
+    s = G.Engine.tryMove(s, 4, 4).next;
+    s = G.Engine.tryMove(s, 3, 3).next;
+    s = G.Engine.tryMove(s, 5, 5).next;
+    const text = G.SGF.write(s);
+    const r = G.SGF.parse(text);
+    T.eq(r.size, 9); T.eq(r.moveLog.length, 3);
+    T.eqArr(Array.from(r.board), Array.from(s.board));
+  });
+  T.test('parse 手写 SGF', () => {
+    const sgf = '(;FF[4]SZ[9]KM[7.5];B[ee];W[ce];B[];W[ge])';
+    const s = G.SGF.parse(sgf);
+    T.eq(s.size, 9); T.eq(s.moveLog.length, 4); T.ok(s.moveLog[2].pass);
+  });
+  T.test('parse 垃圾抛错', () => {
+    let threw = false;
+    try { G.SGF.parse('this is not sgf'); } catch (e) { threw = true; }
+    T.ok(threw);
+  });
+
+  // ===== AI 合法性 =====
+  T.suite('AI 合法性');
+  T.test('Easy 在空 9x9 给出合法着', () => {
+    const s = G.Engine.createGame({ size: 9 });
+    const m = G.AIEasy.pick(s);
+    if (!m.pass) T.ok(G.Engine.tryMove(s, m.x, m.y).ok);
+  });
+  T.test('Easy 30 步自我对弈不抛错且全合法', () => {
+    let s = G.Engine.createGame({ size: 9 });
+    for (let i = 0; i < 30; i++) {
+      const m = G.AIEasy.pick(s);
+      if (m.pass) { s = G.Engine.pass(s); continue; }
+      const r = G.Engine.tryMove(s, m.x, m.y);
+      T.ok(r.ok, '第 ' + i + ' 步非法: ' + (r.reason || ''));
+      s = r.next;
+      if (s.phase !== 'playing') break;
+    }
+  });
+  T.test('Medium 给出合法着', () => {
+    const s = G.Engine.createGame({ size: 9 });
+    const m = G.AIMedium.pick(s);
+    if (!m.pass) T.ok(G.Engine.tryMove(s, m.x, m.y).ok);
+  });
+  T.test('Medium 20 步自我对弈合法', () => {
+    let s = G.Engine.createGame({ size: 9 });
+    for (let i = 0; i < 20; i++) {
+      const m = G.AIMedium.pick(s);
+      if (m.pass) { s = G.Engine.pass(s); continue; }
+      const r = G.Engine.tryMove(s, m.x, m.y);
+      T.ok(r.ok); s = r.next;
+      if (s.phase !== 'playing') break;
+    }
+  });
+  T.test('MCTS（simulations=30）给出合法着', async () => {
+    const s = G.Engine.createGame({ size: 9 });
+    const m = await G.AIMcts.pick(s, { simulations: 30 });
+    if (!m.pass) T.ok(G.Engine.tryMove(s, m.x, m.y).ok);
+  });
+
+  // ===== Storage =====
+  T.suite('Storage');
+  T.test('current 保存/读取', () => {
+    G.Storage.saveCurrent({ sgf: '(;FF[4]SZ[9])', config: { size: 9 } });
+    const got = G.Storage.loadCurrent();
+    T.ok(got);
+    T.eq(got.sgf, '(;FF[4]SZ[9])');
+    G.Storage.clearCurrent();
+    T.eq(G.Storage.loadCurrent(), null);
+  });
+
+  // ==== 总结 ====
+  await T.runAll();
+});
+
+function makeTester() {
+  const suites = [];
+  let cur = null;
+  return {
+    suite(name) { cur = { name, tests: [] }; suites.push(cur); },
+    test(name, fn) { cur.tests.push({ name, fn }); },
+    eq(a, b, msg) {
+      if (a !== b) throw new Error((msg || 'eq') + ': 期望 ' + JSON.stringify(b) + '，得到 ' + JSON.stringify(a));
+    },
+    eqArr(a, b) {
+      if (a.length !== b.length) throw new Error('数组长度: ' + a.length + ' vs ' + b.length);
+      for (let i = 0; i < a.length; i++) {
+        if (a[i] !== b[i]) throw new Error('arr[' + i + ']: ' + a[i] + ' vs ' + b[i]);
+      }
+    },
+    ok(x, msg) { if (!x) throw new Error(msg || ('期望真值，得到 ' + x)); },
+    async runAll() {
+      let pass = 0, fail = 0;
+      for (const s of suites) {
+        write('\n[' + s.name + ']', 'head');
+        for (const t of s.tests) {
+          try {
+            await t.fn();
+            write('  ✓ ' + t.name, 'pass');
+            pass++;
+          } catch (e) {
+            write('  ✗ ' + t.name + '\n      ' + e.message, 'fail');
+            fail++;
+          }
+        }
+      }
+      const total = pass + fail;
+      write('');
+      const sum = document.createElement('div');
+      sum.className = 'summary ' + (fail === 0 ? 'ok' : 'bad');
+      sum.textContent = `${pass} / ${total} 通过` + (fail ? `（失败 ${fail}）` : ' ✓');
+      out.appendChild(sum);
+    },
+  };
+}
+</script>
+
+</body>
+</html>
