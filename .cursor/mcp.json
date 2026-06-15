@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "amap-maps": {
+      "command": "/Users/shuchaowang/.cursor/bin/amap-mcp-wrapper.sh",
+      "args": []
+    }
+  }
+}
