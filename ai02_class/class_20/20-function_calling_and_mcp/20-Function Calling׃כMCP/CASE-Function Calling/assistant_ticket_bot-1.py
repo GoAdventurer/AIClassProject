@@ -85,6 +85,10 @@ def init_agent_service():
         'model': 'qwen-max',
         'timeout': 30,
         'retry_count': 3,
+        'generate_cfg': {
+            'temperature': 0,
+            'seed': 1234,      # 固定随机种子，进一步增强可复现性
+        },
     }
     try:
         bot = Assistant(
