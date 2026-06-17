@@ -25,8 +25,9 @@ Thumbs.db
 # Runtime artifacts from class exercises
 **/workspace/tools/code_interpreter/
 
-# Generated chart artifacts (pyecharts/ECharts output)
+# Generated chart artifacts (pyecharts/ECharts & matplotlib output)
 **/charts/
+**/image_show/
 
 # Local SQLite databases (mock/generated data)
 *.db

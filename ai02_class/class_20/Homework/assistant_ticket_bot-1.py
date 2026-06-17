@@ -59,7 +59,10 @@ SUM(CASE WHEN SKU LIKE 'USB%' THEN quantity ELSE 0 END) AS two_day_ticket_sales
 - 日期范围筛选：order_time >= '2023-07-01' AND order_time < '2023-08-01'
 我将回答用户关于门票相关的问题。
 当用户需要图表/可视化（如柱状图、折线图、饼图）时，我会先用 exc_sql 查询数据，
-再调用 plot_chart 工具，把查询得到的类目(x_data)和数值(y_data)传给它进行绘图。
+再调用 plot_chart 工具进行绘图：x_data 为类目；当只有一个指标时用 y_data；
+当有多个指标（如“一日票销量”和“二日票销量”）时，使用 series 传多系列，
+格式为 [{"name":"一日票","data":[...]},{"name":"二日票","data":[...]}]，
+这样会绘制多色分组柱状图，颜色更丰富。
 """
 
 
@@ -225,15 +228,26 @@ class PlotChartTool(BaseTool):
             'required': True,
         },
         {
+            'name': 'series',
+            'type': 'string',
+            'description': (
+                "多系列数据的JSON字符串（推荐）。格式为对象数组，每个对象含 name 和 data，"
+                "每个 data 与 x_data 一一对应。"
+                "例如 '[{\"name\":\"一日票\",\"data\":[10,20,30]},{\"name\":\"二日票\",\"data\":[5,8,12]}]'。"
+                "若只有单系列，可改用 y_data。"
+            ),
+            'required': False,
+        },
+        {
             'name': 'y_data',
             'type': 'string',
-            'description': "Y轴数值数组的JSON字符串，例如 '[120, 88, 200]'；需与 x_data 一一对应",
-            'required': True,
+            'description': "单系列时使用：Y轴数值数组的JSON字符串，例如 '[120, 88, 200]'；需与 x_data 一一对应。提供 series 时可忽略本参数",
+            'required': False,
         },
         {
             'name': 'series_name',
             'type': 'string',
-            'description': '数据系列名称（图例显示），例如 “入园人数”',
+            'description': '单系列时的系列名称（图例显示），例如 “入园人数”',
             'required': False,
         },
     ]
@@ -253,6 +267,13 @@ class PlotChartTool(BaseTool):
         title = args.get('title', '图表')
         series_name = args.get('series_name', '数值')
 
+        # 丰富的调色板（多系列 / 多扇区 / 单系列多色柱子都会用到）
+        palette = [
+            '#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de',
+            '#3ba272', '#fc8452', '#9a60b4', '#ea7ccc', '#ff9f7f',
+            '#37a2da', '#ffdb5c', '#9fe6b8', '#e062ae', '#e690d1',
+        ]
+
         # x_data / y_data 可能是 JSON 字符串，也可能已经是列表，做兼容处理
         def _to_list(v):
             if isinstance(v, list):
@@ -263,40 +284,77 @@ class PlotChartTool(BaseTool):
                 return [s.strip() for s in str(v).split(',') if s.strip()]
 
         x_data = _to_list(args.get('x_data', []))
-        y_data = _to_list(args.get('y_data', []))
+        if not x_data:
+            return "绘图失败：x_data 为空。"
 
-        if not x_data or not y_data:
-            return "绘图失败：x_data 或 y_data 为空。"
-        if len(x_data) != len(y_data):
-            return f"绘图失败：x_data({len(x_data)}) 与 y_data({len(y_data)}) 长度不一致。"
+        # 统一解析多系列：优先使用 series，否则回退到单系列 (y_data + series_name)
+        raw_series = args.get('series')
+        series_list = []
+        if raw_series:
+            parsed = raw_series if isinstance(raw_series, list) else json.loads(raw_series)
+            for s in parsed:
+                name = s.get('name', '数值')
+                data = _to_list(s.get('data', []))
+                series_list.append({'name': name, 'data': data})
+        else:
+            y_data = _to_list(args.get('y_data', []))
+            if not y_data:
+                return "绘图失败：未提供 series，也未提供 y_data。"
+            series_list.append({'name': series_name, 'data': y_data})
+
+        # 校验每个系列数据长度
+        for s in series_list:
+            if len(s['data']) != len(x_data):
+                return (f"绘图失败：系列“{s['name']}”的数据长度({len(s['data'])}) "
+                        f"与 x_data({len(x_data)}) 不一致。")
 
         try:
             if chart_type == 'pie':
+                # 饼图只取第一个系列，每个扇区自动用调色板不同颜色
+                first = series_list[0]
                 chart = (
                     Pie()
-                    .add(series_name, [list(z) for z in zip(x_data, y_data)])
-                    .set_global_opts(title_opts=opts.TitleOpts(title=title))
+                    .add(first['name'], [list(z) for z in zip(x_data, first['data'])])
+                    .set_colors(palette)
+                    .set_global_opts(
+                        title_opts=opts.TitleOpts(title=title),
+                        legend_opts=opts.LegendOpts(type_='scroll', pos_top='8%'),
+                    )
                     .set_series_opts(label_opts=opts.LabelOpts(formatter='{b}: {c} ({d}%)'))
                 )
             elif chart_type == 'line':
-                chart = (
-                    Line()
-                    .add_xaxis([str(x) for x in x_data])
-                    .add_yaxis(series_name, y_data)
-                    .set_global_opts(
-                        title_opts=opts.TitleOpts(title=title),
-                        xaxis_opts=opts.AxisOpts(axislabel_opts=opts.LabelOpts(rotate=30)),
-                    )
+                chart = Line().add_xaxis([str(x) for x in x_data])
+                for s in series_list:
+                    chart.add_yaxis(s['name'], s['data'], is_smooth=True)
+                chart.set_colors(palette)
+                chart.set_global_opts(
+                    title_opts=opts.TitleOpts(title=title, pos_left='center'),
+                    xaxis_opts=opts.AxisOpts(axislabel_opts=opts.LabelOpts(rotate=30)),
+                    legend_opts=opts.LegendOpts(type_='scroll', pos_top='8%'),
                 )
             else:  # 默认柱状图
-                chart = (
-                    Bar()
-                    .add_xaxis([str(x) for x in x_data])
-                    .add_yaxis(series_name, y_data)
-                    .set_global_opts(
-                        title_opts=opts.TitleOpts(title=title),
-                        xaxis_opts=opts.AxisOpts(axislabel_opts=opts.LabelOpts(rotate=30)),
-                    )
+                chart = Bar().add_xaxis([str(x) for x in x_data])
+                if len(series_list) == 1:
+                    # 单系列：每根柱子用不同颜色，让画面更丰富
+                    s = series_list[0]
+                    bar_items = [
+                        opts.BarItem(
+                            name=str(x_data[i]),
+                            value=v,
+                            itemstyle_opts=opts.ItemStyleOpts(color=palette[i % len(palette)]),
+                        )
+                        for i, v in enumerate(s['data'])
+                    ]
+                    chart.add_yaxis(s['name'], bar_items)
+                else:
+                    # 多系列：分组柱状图，每个系列一种颜色
+                    for s in series_list:
+                        chart.add_yaxis(s['name'], s['data'])
+                    chart.set_colors(palette)
+                chart.set_global_opts(
+                    title_opts=opts.TitleOpts(title=title, pos_left='center'),
+                    xaxis_opts=opts.AxisOpts(axislabel_opts=opts.LabelOpts(rotate=30)),
+                    legend_opts=opts.LegendOpts(type_='scroll', pos_top='8%'),
                 )
 
             # 渲染为 HTML 文件
@@ -309,7 +367,9 @@ class PlotChartTool(BaseTool):
             # 用无头 Chrome 把 ECharts 截图为 PNG，便于直接嵌入聊天界面
             from pyecharts.render import make_snapshot
             from snapshot_selenium import snapshot
-            make_snapshot(snapshot, html_path, png_path, is_remove_html=False)
+            # delay 调大，确保 ECharts 的 JS（从 CDN 加载）渲染完成后再截图，
+            # 否则可能出现 "echarts is not defined"
+            make_snapshot(snapshot, html_path, png_path, delay=4, is_remove_html=False)
 
             cn_type = {'bar': '柱状图', 'line': '折线图', 'pie': '饼图'}.get(chart_type, '图表')
             # 返回 Markdown 图片，WebUI 会把 PNG 直接渲染在聊天框内
