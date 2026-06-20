@@ -23,7 +23,11 @@ Thumbs.db
 .env.*
 
 # Runtime artifacts from class exercises
+**/workspace/
 **/workspace/tools/code_interpreter/
+
+# Generated research reports
+research_report_*.txt
 
 # Generated chart artifacts (pyecharts/ECharts & matplotlib output)
 **/charts/
