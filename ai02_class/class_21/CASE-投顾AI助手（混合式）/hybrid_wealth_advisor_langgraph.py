@@ -34,7 +34,7 @@ warnings.filterwarnings("ignore")
 DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY")
 
 # 创建LLM实例（使用ChatTongyi以支持工具调用）
-llm = ChatTongyi(model_name="qwen-turbo-latest", dashscope_api_key=DASHSCOPE_API_KEY)
+llm = ChatTongyi(model_name="qwen-max", dashscope_api_key=DASHSCOPE_API_KEY)
 
 # 定义客户信息数据结构
 class CustomerProfile(BaseModel):
