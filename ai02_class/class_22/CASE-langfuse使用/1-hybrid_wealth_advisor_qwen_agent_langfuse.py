@@ -573,7 +573,7 @@ def app_gui(customer_id: str = "customer1"):
         WebUI(
             agent,
             chatbot_config=chatbot_config
-        ).run()
+        ).run(server_port=7860)
     except Exception as e:
         print(f"启动 Web 界面失败: {str(e)}")
         print("请检查网络连接和 API Key 配置")

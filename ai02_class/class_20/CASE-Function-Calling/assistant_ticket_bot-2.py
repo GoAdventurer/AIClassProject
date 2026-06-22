@@ -96,8 +96,11 @@ class ExcSQLTool(BaseTool):
 
     def call(self, params: str, **kwargs) -> str:
         import json
+        import matplotlib
+        matplotlib.use('Agg')
         import matplotlib.pyplot as plt
-        import io, os, time
+        import os, time
+        import gradio as gr
         args = json.loads(params)
         sql_input = args['sql_input']
         database = args.get('database', 'ubr')
@@ -128,16 +131,17 @@ class ExcSQLTool(BaseTool):
             plt.xticks([p + bar_width*(len(y_fields)-1)/2 for p in x_pos], x_labels, rotation=45, ha='right')
             plt.legend()
             plt.tight_layout()
-            # 自动创建目录
+            # 保存为文件并通过 Gradio 静态文件服务对外提供，
+            # 工具只把短链接返回给大模型，避免 base64 撑爆模型输入长度
             save_dir = os.path.join(os.path.dirname(__file__), 'image_show')
             os.makedirs(save_dir, exist_ok=True)
-            # 生成唯一文件名
+            gr.set_static_paths(paths=[save_dir])
             filename = f'bar_{int(time.time()*1000)}.png'
-            save_path = os.path.join(save_dir, filename)
-            plt.savefig(save_path)
+            save_path = os.path.abspath(os.path.join(save_dir, filename))
+            plt.savefig(save_path, dpi=100)
             plt.close()
-            img_path = os.path.join('image_show', filename)
-            img_md = f'![柱状图]({img_path})'
+            img_url = '/gradio_api/file=' + save_path.replace('\\', '/')
+            img_md = f'![柱状图]({img_url})'
             return f"{md}\n\n{img_md}"
         except Exception as e:
             return f"SQL执行或可视化出错: {str(e)}"
@@ -228,7 +232,7 @@ def app_gui():
         WebUI(
             bot,
             chatbot_config=chatbot_config
-        ).run()
+        ).run(server_port=7860)
     except Exception as e:
         print(f"启动 Web 界面失败: {str(e)}")
         print("请检查网络连接和 API Key 配置")

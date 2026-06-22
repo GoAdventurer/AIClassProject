@@ -126,14 +126,14 @@ def get_metrics():
     # 1. 答案相关性：评估回答是否与问题相关
     relevancy_metric = AnswerRelevancyMetric(
         threshold=0.6,
-        model="gpt-4o-mini",
+        model="qwen-max",
         include_reason=True
     )
 
     # 2. 幻觉检测：检测是否编造虚假信息
     hallucination_metric = HallucinationMetric(
         threshold=0.5,
-        model="gpt-4o-mini",
+        model="qwen-max",
         include_reason=True
     )
 
@@ -151,7 +151,7 @@ def get_metrics():
             "判断是否有个性化的考虑"
         ],
         threshold=0.5,
-        model="gpt-4o-mini"
+        model="qwen-max"
     )
 
     return [relevancy_metric, hallucination_metric, risk_consideration_metric]
@@ -280,8 +280,8 @@ def test_deliberative_query():
     )
 
     metrics = [
-        AnswerRelevancyMetric(threshold=0.6, model="gpt-4o-mini"),
-        HallucinationMetric(threshold=0.5, model="gpt-4o-mini")
+        AnswerRelevancyMetric(threshold=0.6, model="qwen-max"),
+        HallucinationMetric(threshold=0.5, model="qwen-max")
     ]
     assert_test(test_case, metrics)
 

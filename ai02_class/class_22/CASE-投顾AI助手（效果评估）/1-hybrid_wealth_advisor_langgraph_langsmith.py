@@ -69,7 +69,7 @@ LANGSMITH_PROJECT = os.getenv("LANGCHAIN_PROJECT", "wealth-advisor-hybrid-agent"
 print("LANGSMITH_ENABLED=", LANGSMITH_ENABLED)
 
 # 创建LLM实例
-llm = Tongyi(model_name="qwen-turbo-latest", dashscope_api_key=DASHSCOPE_API_KEY)
+llm = Tongyi(model_name="qwen-max", dashscope_api_key=DASHSCOPE_API_KEY)
 
 # 定义客户信息数据结构
 class CustomerProfile(BaseModel):

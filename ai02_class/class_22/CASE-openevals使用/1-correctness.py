@@ -28,7 +28,7 @@ print("创建评估 LLM...")
 print("=" * 60)
 
 eval_llm = ChatTongyi(
-    model_name="qwen-turbo",
+    model_name="qwen-max",
     dashscope_api_key=DASHSCOPE_API_KEY,
     temperature=0
 )
