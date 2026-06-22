@@ -95,12 +95,13 @@ def answer_question(query: str) -> str:
     best_rule = None
     best_score = 0
 
+    # 中文没有空格，不能用 split() 分词，改为按字符计算重合度
+    query_chars = set(query.lower()) - set(" \t\n，,。？?、")
     for rule in FUND_RULES_DB:
-        query_words = set(query.lower().split())
-        rule_words = set((rule["question"] + " " + rule["category"]).lower().split())
-        common_words = query_words.intersection(rule_words)
+        rule_text = (rule["question"] + rule["category"]).lower()
+        common = sum(1 for c in query_chars if c in rule_text)
 
-        score = len(common_words) / max(1, len(query_words))
+        score = common / max(1, len(query_chars))
         if score > best_score:
             best_score = score
             best_rule = rule

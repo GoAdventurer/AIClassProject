@@ -1,4 +1,0 @@
-langchain==1.0.3
-langchain_community==0.4.1
-langgraph>=1.2.6
-dashscope
