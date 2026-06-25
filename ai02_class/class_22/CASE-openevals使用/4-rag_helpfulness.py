@@ -15,7 +15,7 @@ if not DASHSCOPE_API_KEY:
     print("错误: 请设置 DASHSCOPE_API_KEY 环境变量")
     exit(1)
 
-eval_llm = ChatTongyi(model_name="qwen-turbo", dashscope_api_key=DASHSCOPE_API_KEY, temperature=0)
+eval_llm = ChatTongyi(model_name="qwen-max", dashscope_api_key=DASHSCOPE_API_KEY, temperature=0)
 
 evaluator = create_llm_as_judge(
     prompt=RAG_HELPFULNESS_PROMPT,
