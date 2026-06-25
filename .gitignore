@@ -35,3 +35,11 @@ research_report_*.txt
 
 # Local SQLite databases (mock/generated data)
 *.db
+
+# Third-party OpenManus clones (not part of this repo)
+ai02_class/class_23/OpenManus-cy/
+ai02_class/class_23/OpenManus-gui/
+ai02_class/class_23/OpenManus-rag/
+
+# Large course PDF (not source)
+ai02_class/class_23/*.pdf
